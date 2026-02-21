@@ -3,55 +3,90 @@ import torch as th
 import time
 from concurrent.futures import ThreadPoolExecutor
 import numba
-from .lookup import lookup
+from .lookup import lookup, update_normal_scores, update_normal_score_of_evicted_nodes
 from agents.local_agents import SharedStateStore, MetricsCollectionAgent, ContextAnalysisAgent, DecisionMakingLLMAgent
-from agents.non_llm_agents import MLPEvictionAgent, TabNetEvictionAgent, LogisticRegressionEvictionAgent, RandomForestEvictionAgent, XGBoostEvictionAgent, SVMEvictionAgent
+from agents.non_llm_classifiers import MLPEvictionClassifier, TabNetEvictionClassifier, LogisticRegressionEvictionClassifier, RandomForestEvictionClassifier, XGBoostEvictionClassifier, SVMEvictionClassifier
 import queue
 import threading
 
-class Prefetch:
+class PrefetchBuffer:
     """
-    This is the hybrid version of the prefetcher.
-    It uses numba only for lookup.
-    Not memory efficient as normal_score is O(n) space.
+    Shared prefetcher implementation.
+    `memory_efficient=False` uses a full-graph normal_score array.
+    `memory_efficient=True` uses a halo-only normal_score array.
     """
-    def __init__(self, graph, halo_nodes, train_nid, device, args, metadata, ollama_port, local_rank, logdir):
-        print(f"Initializing Prefetch with fraction {args.prefetch_fraction} period {args.eviction_period} alpha {args.alpha}")
-        # Graph and Data Parameters
+    def __init__(self, graph, halo_nodes, train_nid, device, args, metadata, ollama_port, local_rank, logdir, memory_efficient=False):
+        """Initialize prefetch state, decision backend, workers, and logging."""
         self.args = args
+        self.memory_efficient = memory_efficient
+        print(
+            f"Initializing {'Memory Efficient Prefetcher' if self.memory_efficient else 'PrefetchBuffer'} "
+            f"with fraction {args.prefetch_fraction} period {args.eviction_period} alpha {args.alpha}"
+        )
+        self._setup_graph_context(graph, halo_nodes, train_nid, device)
+        self._setup_buffer_state()
+        self._setup_eviction_policy_params()
+        self._setup_metrics_state()
+        self._setup_eviction_backend(metadata, ollama_port, local_rank)
+        self._setup_worker()
+        self._setup_decision_logging(logdir)
+        self._start_workers()
+
+    def _setup_graph_context(self, graph, halo_nodes, train_nid, device):
+        """Initialize graph- and partition-related fields."""
         self.graph = graph
         self.train_nid = train_nid
         self.halo_nodes_rank = np.array(list(halo_nodes))
         self.sort_halo_nodes()
         self.device = device
         self.rank = self.graph.rank()
-        self.num_layers = args.num_layers
+        self.num_layers = self.args.num_layers
 
-        # Prefetch Buffer Parameters
-        self.fraction = args.prefetch_fraction
+    def _setup_buffer_state(self):
+        """Initialize prefetch buffer tensors, score arrays, and buffer policy."""
+        self.fraction = self.args.prefetch_fraction
         self.buffer_length = 0  # Will be set later
         self.prefetch_ids = np.zeros(self.buffer_length, dtype=np.int32)
         self.prefetch_features = th.zeros(self.buffer_length, self.graph.ndata["features"].shape[1])
         self.eviction_score = None  # O(len(buffer)) space initialized in bulk_prefetch
-        self.normal_score = np.zeros(self.graph.number_of_nodes(), dtype=np.float32)
-        self.prefetcher_init = args.prefetcher_init
-
-        # Sparse Tensor for Feature Storage
+        if self.memory_efficient:
+            self.normal_score = np.zeros(self.halo_nodes_rank.shape[0], dtype=np.float32)
+        else:
+            self.normal_score = np.zeros(self.graph.number_of_nodes(), dtype=np.float32)
+        self.prefetcher_init = self.args.prefetcher_init
         self.fetched_features = th.sparse_coo_tensor(
             (self.graph.number_of_nodes(), self.graph.ndata["features"].shape[1]), dtype=th.float32
         )
+        self.num_numba_threads = self.args.num_numba_threads
+        self.executor = ThreadPoolExecutor(max_workers=1)
 
-        # Eviction Parameters
-        self.alpha = args.alpha
+        if self.args.prefetcher_init == "degree":
+            print("Degree based prefetch")
+            self.degree_based_prefetch()
+        elif self.args.prefetcher_init == "empty":
+            print("Empty buffer")
+            self.empty_buffer()
+        elif self.args.prefetcher_init == "random":
+            print("Random prefetch")
+            self.random_prefetch()
+        else:
+            ValueError("Invalid prefetcher initialization method")
+
+    def _setup_eviction_policy_params(self):
+        """Initialize eviction policy hyperparameters and state flags."""
+        self.alpha = self.args.alpha
         self.decay = np.float32(1 - self.alpha)
-        self.period = args.eviction_period
+        self.period = self.args.eviction_period
         self.threshold = round(self.calculate_threshold(), 3)
         self.evict = False
-        self.eviction_cutoff = args.eviction_cutoff
+        self.eviction_cutoff = self.args.eviction_cutoff
         self.num_evicted_nodes = 0
         self.evicted_candidates = set()
+        self.donotevict_counter = 0  # Counter for "do not evict" decisions
+        self.disable_eviction = False  # Flag to disable eviction if needed
 
-        # Performance Tracking Parameters
+    def _setup_metrics_state(self):
+        """Initialize runtime counters and metric accumulators."""
         self.counter = 0
         self.rpc_time = 0
         self.prefetch_compute_time = 0
@@ -60,188 +95,106 @@ class Prefetch:
         self.update_score_time = 0
         self.agent_decision_wait_time = 0
 
-        # Flag and State Parameters
         self.prefetch_indices_map = None
         self.sorted = False  # Indicates if `prefetch_ids` are sorted
         self.hit = 0
         self.miss = 0
-        self.hit_rate_flag = args.hit_rate_flag
+        self.hit_rate_flag = self.args.hit_rate_flag
 
-        # Parallelization Parameters
-        self.num_numba_threads = args.num_numba_threads
-        self.executor = ThreadPoolExecutor(max_workers=1)  
-
-        # Initializing Buffer; This is where buffer length is set
-        if args.prefetcher_init == "degree":
-            print("Degree based prefetch")
-            self.degree_based_prefetch()
-        elif args.prefetcher_init == "empty":
-            print("Empty buffer")
-            self.empty_buffer()
-        elif args.prefetcher_init == "random":
-            print("Random prefetch")
-            self.random_prefetch()
-        else:
-            ValueError("Invalid prefetcher initialization method")
-
-        # Agent Parameters
-        self.window_size = self.period 
+        self.window_size = self.period
         self.history_size = 5
 
-        # Graph Metadata for Context Analysis
+    def _setup_eviction_backend(self, metadata, ollama_port, local_rank):
+        """Select and initialize classifier or LLM decision backend."""
         self.metadata = metadata
         self.metadata["buffer_size"] = self.buffer_length
-
-        if self.args.agent_model == "mlp":
-            self.use_llm = False
-            self.decision_agent = MLPEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
-        elif self.args.agent_model == "tabnet":
-            self.use_llm = False
-            self.decision_agent = TabNetEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
-        elif self.args.agent_model == "lr":
-            self.use_llm = False
-            self.decision_agent = LogisticRegressionEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
-        elif self.args.agent_model == "rf":
-            self.use_llm = False
-            self.decision_agent = RandomForestEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
-        elif self.args.agent_model == "xgb":
-            self.use_llm = False
-            self.decision_agent = XGBoostEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
-        elif self.args.agent_model == "svm":
-            self.use_llm = False
-            self.decision_agent = SVMEvictionAgent(
-                model_dir=self.args.ml_model_dir,
-                device=self.device,
-                dataset=self.metadata["dataset"],
-                rank=self.rank,
-                batch_size=self.metadata["minibatch_size"],
-                num_total_nodes=self.metadata["total_nodes"], 
-                num_partition_nodes=self.graph.local_partition.number_of_nodes(),
-                num_remote_nodes=self.metadata["num_remote_nodes"],
-                buffer_size=self.metadata["buffer_size"],
-                enable_finetune=self.args.enable_finetune,
-                finetune_interval=self.args.finetune_interval,
-            )
+        classifiers = {
+            "mlp": MLPEvictionClassifier,
+            "tabnet": TabNetEvictionClassifier,
+            "lr": LogisticRegressionEvictionClassifier,
+            "rf": RandomForestEvictionClassifier,
+            "xgb": XGBoostEvictionClassifier,
+            "svm": SVMEvictionClassifier,
+        }
+        if self.args.decision_model in classifiers:
+            classifier_kwargs = self._classifier_kwargs()
+            self._create_classifier(classifiers[self.args.decision_model], classifier_kwargs)
         else:
-            self.use_llm = True
-            # Initialize Model
-            if self.args.agent_model=="qwen-1.5b":
-                self.agent_model_name = "hf.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF:F16"
-            elif self.args.agent_model=="smollm2-360M":
-                self.agent_model_name = "hf.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF"
-            elif self.args.agent_model=="smollm2-1.7B":
-                self.agent_model_name = "hf.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF"
-            elif self.args.agent_model=="qwen2.5-math-1.5B":
-                self.agent_model_name = "hf.co/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF:F16"
-            elif self.args.agent_model == "granite3.1-moe:3b":
-                self.agent_model_name = "granite3.1-moe:3b-instruct-fp16"
-            elif self.args.agent_model == "granite3.1-moe:1b":
-                self.agent_model_name = "granite3.1-moe:1b-instruct-fp16"
-            elif self.args.agent_model == "mixtral:8x7b":
-                self.agent_model_name = "mixtral:8x7b-instruct-v0.1-q3_K_L"
-            elif self.args.agent_model == "llama4":
-                self.agent_model_name = "hf.co/bartowski/meta-llama_Llama-4-Scout-17B-16E-Instruct-GGUF:Q2_K"
-            elif self.args.agent_model == "mixtral:8x22b":
-                self.agent_model_name = "mixtral:8x22b-instruct-v0.1-q2_K"
-            else:
-                self.agent_model_name = self.args.agent_model
-            
-            # SharedState and Agents
-            self.shared_state_store = SharedStateStore(self.history_size)
-            self.metrics_agent = MetricsCollectionAgent(self.shared_state_store, self.window_size)
-            self.context_agent = ContextAnalysisAgent(metadata, self.history_size)
-            self.decision_agent = DecisionMakingLLMAgent(
-                self.shared_state_store,
-                model_name=self.agent_model_name,
-                local_port=ollama_port,
-                rank=local_rank,
-                context_agent=self.context_agent,
-                metadata=self.metadata
-            )
+            self._create_llm_agent(ollama_port, local_rank)
 
-            # Agent Helpers
-            self.decision_agent.warmup() # Warmup the LLM agent to avoid latency in the first decision
+    def _classifier_kwargs(self):
+        """Build common kwargs for classifier backend constructors."""
+        return {
+            "model_dir": self.args.ml_model_dir,
+            "device": self.device,
+            "dataset": self.metadata["dataset"],
+            "rank": self.rank,
+            "batch_size": self.metadata["minibatch_size"],
+            "num_total_nodes": self.metadata["total_nodes"],
+            "num_partition_nodes": self.graph.local_partition.number_of_nodes(),
+            "num_remote_nodes": self.metadata["num_remote_nodes"],
+            "buffer_size": self.metadata["buffer_size"],
+            "enable_finetune": self.args.enable_finetune,
+            "finetune_interval": self.args.finetune_interval,
+        }
+
+    def _create_classifier(self, classifier_cls, classifier_kwargs):
+        """Construct the selected classifier backend."""
+        self.use_classifier = True
+        self.decision_classifier = classifier_cls(**classifier_kwargs)
+
+    def _create_llm_agent(self, ollama_port, local_rank):
+        """Construct the LLM decision backend and warm it up."""
+        self.use_classifier = False
+        self.agent_model_name = self._resolve_llm_model_name()
+        self.shared_state_store = SharedStateStore(self.history_size)
+        self.metrics_agent = MetricsCollectionAgent(self.shared_state_store, self.window_size)
+        self.context_agent = ContextAnalysisAgent(self.metadata, self.history_size)
+        self.decision_agent = DecisionMakingLLMAgent(
+            self.shared_state_store,
+            model_name=self.agent_model_name,
+            local_port=ollama_port,
+            rank=local_rank,
+            context_agent=self.context_agent,
+            metadata=self.metadata
+        )
+        self.decision_agent.warmup()  # Warmup the LLM agent to avoid latency in the first decision
+
+    def _resolve_llm_model_name(self):
+        """Resolve configured LLM alias to runtime model identifier."""
+        alias_map = {
+            "qwen-1.5b": "hf.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF:F16",
+            "smollm2-360M": "hf.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF",
+            "smollm2-1.7B": "hf.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF",
+            "qwen2.5-math-1.5B": "hf.co/bartowski/Qwen2.5-Math-1.5B-Instruct-GGUF:F16",
+            "granite3.1-moe:3b": "granite3.1-moe:3b-instruct-fp16",
+            "granite3.1-moe:1b": "granite3.1-moe:1b-instruct-fp16",
+            "mixtral:8x7b": "mixtral:8x7b-instruct-v0.1-q3_K_L",
+            "llama4": "hf.co/bartowski/meta-llama_Llama-4-Scout-17B-16E-Instruct-GGUF:Q2_K",
+            "mixtral:8x22b": "mixtral:8x22b-instruct-v0.1-q2_K",
+        }
+        return alias_map.get(self.args.decision_model, self.args.decision_model)
+
+    def _setup_worker(self):
+        """Initialize worker queues and synchronization primitives."""
         self.decision = None
         self.eviction_decision_requests = queue.Queue()
         self.eviction_decision_responses = queue.Queue()
-        self.donotevict_counter = 0  # Counter for "do not evict" decisions
-        self.disable_eviction = False  # Flag to disable eviction if needed
-
-        # Thread Safety for Agents
-        # Threading lock; this should be initialized before the worker thread starts
         self.pause_lock = threading.Lock()
         self.pause_cond = threading.Condition(self.pause_lock)
         self.pause_worker = False  # When True, worker waits
 
-        # Start the eviction decision worker thread
-        if not self.use_llm:
+    def _setup_decision_logging(self, logdir):
+        """Open the per-rank decision log file."""
+        self.decision_log_file = open(f"{logdir}/{self.args.decision_model}_{self.rank}.txt", "a")
+
+    def _start_workers(self):
+        """Start background decision worker thread for current backend."""
+        if self.use_classifier:
             self.worker_thread = threading.Thread(target=self.ml_worker, daemon=True)
         else:
             self.worker_thread = threading.Thread(target=self.eviction_decision_worker, daemon=True)
         self.worker_thread.start()
-
-        # Logging
-        self.llm_file = open(f"{logdir}/{self.args.agent_model}_{self.rank}.txt", "a")
     
     def set_pause_worker(self, should_pause: bool):
         """Pause or unpause the eviction worker thread."""
@@ -252,6 +205,7 @@ class Prefetch:
                 self.pause_cond.notify_all()
 
     def empty_buffer(self):
+        """Initialize an empty/sentinel prefetch buffer."""
         self.buffer_length = int(len(self.halo_nodes_rank) * self.fraction) # Use a sentinel value (e.g., self.graph.number_of_nodes()) that is not a valid node id.
         sentinel_base = self.graph.number_of_nodes() # Create sentinel IDs outside the graph range
         self.prefetch_ids = np.arange(
@@ -264,9 +218,11 @@ class Prefetch:
 
 
     def sort_halo_nodes(self):
+        """Sort halo node IDs for deterministic lookup operations."""
         self.halo_nodes_rank = np.sort(self.halo_nodes_rank)
 
     def random_prefetch(self):
+        """Initialize the buffer with a random subset of halo nodes."""
         # Randomly select a subset of halo nodes to prefetch
         selected_nodes = np.random.choice(self.halo_nodes_rank, int(len(self.halo_nodes_rank) * self.fraction),
                                           replace=False)
@@ -274,6 +230,7 @@ class Prefetch:
         self.bulk_prefetch(selected_nodes)
 
     def degree_based_prefetch(self):
+        """Initialize the buffer with highest-degree halo nodes."""
         halo_nodes_tensor = th.tensor(self.halo_nodes_rank)
         # Get the top fraction of nodes by degree
         self.buffer_length = int(len(self.halo_nodes_rank) * self.fraction)
@@ -281,6 +238,7 @@ class Prefetch:
         self.bulk_prefetch(halo_nodes_tensor[top_indices])
 
     def bulk_prefetch(self, nodes):
+        """Populate buffer IDs/features in bulk from selected nodes."""
         # if nodes in numpy array, copy directly
         if isinstance(nodes, np.ndarray):
             self.prefetch_ids = nodes
@@ -291,14 +249,30 @@ class Prefetch:
         self.tag_prefetched_nodes_in_normal_score()
 
     def tag_prefetched_nodes_in_normal_score(self):
-        if self.prefetcher_init == "empty": # If the prefetcher is empty, we don't need to tag the nodes
-            valid_mask = (self.prefetch_ids >= 0) & (self.prefetch_ids < len(self.normal_score))
-            valid_ids = self.prefetch_ids[valid_mask]
-            self.normal_score[valid_ids] = -1
+        """Mark currently prefetched nodes in normal-score storage."""
+        if self.memory_efficient:
+            if self.prefetcher_init == "empty":
+                if self.halo_nodes_rank.size == 0:
+                    return
+                in_bounds_mask = (
+                    (self.prefetch_ids >= self.halo_nodes_rank[0]) &
+                    (self.prefetch_ids <= self.halo_nodes_rank[-1])
+                )
+                valid_prefetch_ids = self.prefetch_ids[in_bounds_mask]
+                indices = np.searchsorted(self.halo_nodes_rank, valid_prefetch_ids)
+                self.normal_score[indices] = -1
+            else:
+                self.normal_score[np.searchsorted(self.halo_nodes_rank, self.prefetch_ids)] = -1
         else:
-            self.normal_score[self.prefetch_ids] = -1
+            if self.prefetcher_init == "empty": # If the prefetcher is empty, we don't need to tag the nodes
+                valid_mask = (self.prefetch_ids >= 0) & (self.prefetch_ids < len(self.normal_score))
+                valid_ids = self.prefetch_ids[valid_mask]
+                self.normal_score[valid_ids] = -1
+            else:
+                self.normal_score[self.prefetch_ids] = -1
 
     def sort_prefetch(self):
+        """Sort prefetch IDs and align feature/score arrays accordingly."""
         sort_idx = np.argsort(self.prefetch_ids)
         self.prefetch_ids = self.prefetch_ids[sort_idx]
         self.prefetch_features = self.prefetch_features[sort_idx]
@@ -307,29 +281,38 @@ class Prefetch:
         self.sorted = True
 
     def calculate_threshold(self):
+        """Compute eviction threshold from alpha and eviction period."""
         # calculate the threshold for eviction
         return 1 * (1 - self.alpha) ** self.period
 
     def calculate_hit_rate(self):
+        """Return current buffer hit rate percentage."""
         total = self.hit + self.miss
         if total == 0:
             return 0  
         return round(self.hit / total * 100)
 
     def calculate_miss_rate(self):
+        """Return current buffer miss rate percentage."""
         total = self.hit + self.miss
         if total == 0:
             return 0 
         return round(self.miss / total * 100)
 
     def update_score(self, missed_minibatch_nodes):
+        """Update normal scores for missed nodes in the current minibatch."""
         update_score_start = time.time()
-        mask = np.nonzero(np.in1d(missed_minibatch_nodes, self.halo_nodes_rank, kind='table'))[0]
-        self.normal_score[missed_minibatch_nodes[mask]] += 1
+        if self.memory_efficient:
+            numba.set_num_threads(self.num_numba_threads - 1) # leave one thread for the main thread
+            self.normal_score = update_normal_scores(self.halo_nodes_rank, missed_minibatch_nodes, self.normal_score)
+        else:
+            mask = np.nonzero(np.in1d(missed_minibatch_nodes, self.halo_nodes_rank, kind='table'))[0]
+            self.normal_score[missed_minibatch_nodes[mask]] += 1
         update_score_end = time.time()
         return update_score_end - update_score_start
 
     def prefetch(self, input_nodes_array, batch_inputs):
+        """Serve minibatch from trainer without eviction."""
         start_prefetch_compute = time.time()
         self.counter += 1
 
@@ -342,6 +325,7 @@ class Prefetch:
         # Set number of threads for numba
         numba.set_num_threads(self.num_numba_threads)
         lookup_start = time.time()
+        
         # Lookup in the prefetch buffer
         hit_indices, missed_minibatch_idx, feature_indices, self.eviction_score = lookup(input_nodes_array,
                                                                                          self.prefetch_ids,
@@ -375,12 +359,14 @@ class Prefetch:
         return batch_inputs, total_rpc_time
 
     def track_per_minibatch(self, input_nodes_array, hit_indices, minibatchid):
+        """Track sampled/found remote-node counts for one minibatch."""
         self.num_remote_nodes_sampled = 0
         self.num_remote_nodes_found = 0
         self.num_remote_nodes_sampled += np.count_nonzero(np.in1d(input_nodes_array, self.halo_nodes_rank, kind='table'))
         self.num_remote_nodes_found = len(hit_indices)
 
     def prefetch_with_eviction(self, input_nodes_array, batch_inputs, epoch, step):
+        """Serve minibatch from trainer with eviction and backend decision loop."""
         start_prefetch_compute = time.time()
         self.counter += 1
 
@@ -390,7 +376,10 @@ class Prefetch:
             self.sort_prefetch()
         sort_end = time.time()
 
-        numba.set_num_threads(self.num_numba_threads)
+        if self.memory_efficient and self.device != "cpu":
+            numba.set_num_threads(30) # TODO: remove hardcoded value in a future cleanup
+        else:
+            numba.set_num_threads(self.num_numba_threads)
         lookup_start = time.time()
         hit_indices, missed_minibatch_idx, hit_in_buffer, self.eviction_score = lookup(input_nodes_array,
                                                                                        self.prefetch_ids,
@@ -419,31 +408,28 @@ class Prefetch:
             decision = self.eviction_decision_responses.get_nowait()
             if "yes, evict" in decision.lower() or "yes" in decision.lower():
                 self.donotevict_counter = 0
+                
                 # Worker is already paused, so we can safely clear the queues
-                # clear all queues
                 with self.eviction_decision_requests.mutex:
                     self.eviction_decision_requests.queue.clear()
                 with self.eviction_decision_responses.mutex:
                     self.eviction_decision_responses.queue.clear()
-                # with self.pause_lock:
-                    # self.eviction_decision_requests.queue.clear()
-                    # self.eviction_decision_responses.queue.clear()
+
                 self.evict = True
                 self.decision = decision
             elif "no, do not evict" in decision.lower() or "no" in decision.lower():
                 self.donotevict_counter += 1
                 self.evict = False
                 self.decision = decision
+
                 # clear all queues
                 with self.eviction_decision_requests.mutex:
                     self.eviction_decision_requests.queue.clear()
                 with self.eviction_decision_responses.mutex:
                     self.eviction_decision_responses.queue.clear()
-                # with self.pause_lock:
-                #     self.eviction_decision_requests.queue.clear()
-                #     self.eviction_decision_responses.queue.clear()
+
                 # Record a pending eviction event for a no-evict decision.
-                if self.use_llm:
+                if not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=0,  # No nodes evicted.
@@ -456,16 +442,15 @@ class Prefetch:
                 print(f"Rank {self.rank} Epoch {epoch} Step {step} | Invalid decision: {decision}")
                 self.evict = False
                 self.decision = None
+
                 # clear all queues
                 with self.eviction_decision_requests.mutex:
                     self.eviction_decision_requests.queue.clear()
                 with self.eviction_decision_responses.mutex:
                     self.eviction_decision_responses.queue.clear()
-                # with self.pause_lock:
-                #     self.eviction_decision_requests.queue.clear()
-                #     self.eviction_decision_responses.queue.clear()
+
                 # Record a pending eviction event for a no-evict decision.
-                if self.use_llm:
+                if not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=0,  # No nodes evicted.
@@ -477,17 +462,6 @@ class Prefetch:
         except queue.Empty:
             # No decision available yet, carry on with the old value
             pass
-
-        # if self.donotevict_counter >= 5: # FIXME: you can use self.cutoff instead of 4 later
-        #     self.disable_eviction = True
-        #     print(f"Rank {self.rank}: Eviction disabled after {self.donotevict_counter} 'do not evict' decisions.")
-        #     with self.pause_lock:
-        #         self.pause_worker = True # Pause the worker thread
-        #     start_normal_rpc = time.time()
-        #     batch_inputs[missed_minibatch_idx] = self.rpc(input_nodes_array[missed_minibatch_idx])
-        #     total_rpc += time.time() - start_normal_rpc
-        #     self.rpc_time += total_rpc
-        #     return batch_inputs, total_rpc
 
         if self.evict:
             evict_start = time.time()
@@ -514,7 +488,7 @@ class Prefetch:
                 # print(f"Rank {self.rank}: Minibatch {self.counter} | Evicted candidates")
                 # self.evict = False
                 # Store a pending eviction record with a reason.
-                if self.use_llm:
+                if not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=self.num_evicted_nodes,
@@ -523,13 +497,13 @@ class Prefetch:
                         reason=self.decision if self.decision is not None else "Eviction triggered."
                     )   
             else:
-                # print(f"Minibatch {self.counter} | Zero eviction candidates")
                 future = self.executor.submit(self.update_score, input_nodes_array[missed_minibatch_idx])
                 no_evict_rpc_start = time.time()  # when no eviction candidates
                 batch_inputs[missed_minibatch_idx] = self.rpc(input_nodes_array[missed_minibatch_idx])
                 total_rpc += time.time() - no_evict_rpc_start
+
                 # No eviction candidates found: store a pending eviction record (skipped) with a reason.
-                if self.use_llm:
+                if not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=0,
@@ -548,7 +522,7 @@ class Prefetch:
         self.track_per_minibatch(input_nodes_array, hit_indices, self.counter)
         if not self.evict: # if eviction happened, we do not want to send this to the eviction decision worker; this is stale data
             # Requests for eviction decision
-            if self.use_llm:
+            if not self.use_classifier:
                 stat = {
                     "epoch": int(epoch),
                     "step": int(step),
@@ -592,6 +566,7 @@ class Prefetch:
         return batch_inputs, total_rpc 
  
     def ml_worker(self):
+        """Background worker that gets classifier decisions from queued stats."""
         while True:
             # A) Check if we are paused
             with self.pause_lock:
@@ -603,7 +578,7 @@ class Prefetch:
             # print(f"Rank {self.rank}: Worker received stats: {stats}")
             # flatten 
             start = time.time()
-            decision = self.decision_agent.decide_eviction(stats.copy())
+            decision = self.decision_classifier.decide_eviction(stats.copy())
             response_time = time.time() - start
             with self.pause_lock:
                 self.pause_worker = True  # Pause the worker thread after processing the stats
@@ -615,11 +590,12 @@ class Prefetch:
                 f"Decision for minibatches {stats['Eviction_Interval_ID']} (Response Time {round(response_time,2)}s): \n<agent>\n{decision}\n<agent>\n")
             # Write to the log file
             print(f"Rank {self.rank}: Decision made: {decision}, writing to log file...")
-            self.llm_file.write(log_entry)
-            self.llm_file.flush() 
+            self.decision_log_file.write(log_entry)
+            self.decision_log_file.flush() 
             
 
     def eviction_decision_worker(self):
+        """Background worker that queries LLM decisions on aggregated windows."""
         # print(f"Rank {self.rank}: Worker thread started!")
         while True:
             # A) Check if we are paused
@@ -644,18 +620,20 @@ class Prefetch:
                             f"Full message sent: <user>\n{msg}\n<user>\n"
                             f"Decision for minibatches {summary['minibatch_id']} (Response Time {round(response_time,2)}s): \n<agent>\n{decision}\n<agent>\n")
                 
-                self.llm_file.write(log_entry)
-                self.llm_file.flush()
+                self.decision_log_file.write(log_entry)
+                self.decision_log_file.flush()
 
                 # Now self-pause immediately so no more stats are consumed
                 with self.pause_lock:
                     self.pause_worker = True
 
     def rpc(self, node_idx):
+        """Fetch node features from distributed graph storage."""
         features = self.graph.ndata["features"][node_idx]
         return features
 
     def find_eviction_candidates(self, desired_slots=None):
+        """Find buffer slots whose eviction score is below threshold."""
         # select the nodes with eviction score < threshold and return their indices and how many of them are there
         below_threshold_mask = self.eviction_score < self.threshold
         eviction_candidates_idx = np.nonzero(below_threshold_mask)[0]
@@ -672,29 +650,52 @@ class Prefetch:
         return eviction_candidates_idx, self.eviction_score[eviction_candidates_idx], slots
 
     def find_replace_candidates(self):
+        """Find candidate nodes to insert into buffer based on normal scores."""
+        if self.memory_efficient:
+            sorted_indices_within_halo = np.argsort(-self.normal_score)
+            valid_indices = sorted_indices_within_halo[self.normal_score[sorted_indices_within_halo] > 0]
+            return valid_indices, self.normal_score[valid_indices]
         # Step 1: Get the scores of the halo nodes.
         halo_scores = self.normal_score[self.halo_nodes_rank]
-
         # Step 2: Sort these scores in descending order and get their indices.
         sorted_indices_within_halo = np.argsort(-halo_scores)
-
         # Filter out the indices corresponding to scores of 0.
         valid_indices = sorted_indices_within_halo[halo_scores[sorted_indices_within_halo] > 0]
-
         # Map these indices back to the original self.normal_score array.
         replace_candidates = self.halo_nodes_rank[valid_indices]
         return replace_candidates, self.normal_score[replace_candidates]
 
     def replace_eviction_candidates(self):
+        """Replace selected eviction slots with scored replacement candidates."""
         eviction_candidates_idx, eviction_score, max_eviction_slots = self.find_eviction_candidates()
 
         # If no eviction candidates, exit early.
         if max_eviction_slots == 0:
             return None, None, 0
 
+        if self.memory_efficient:
+            replace_candidates_idx, normal_score = self.find_replace_candidates()
+            final_slots = min(max_eviction_slots, len(replace_candidates_idx))
+            replace_candidates_idx = replace_candidates_idx[:final_slots]
+            eviction_candidates_idx = eviction_candidates_idx[:final_slots]
+            replace_candidates = self.halo_nodes_rank[replace_candidates_idx]
+            eviction_candidates = self.prefetch_ids[eviction_candidates_idx]
+            self.prefetch_ids[eviction_candidates_idx] = replace_candidates
+
+            numba.set_num_threads(self.num_numba_threads - 1)  # leave one thread for the main thread
+            self.normal_score = update_normal_score_of_evicted_nodes(
+                self.halo_nodes_rank,
+                eviction_candidates,
+                self.normal_score,
+                self.eviction_score[eviction_candidates_idx],
+            )
+            self.tag_prefetched_nodes_in_normal_score()
+            # copy normal scores of the replaced nodes to the eviction scores as they are the new prefetch_ids
+            self.eviction_score[eviction_candidates_idx] = normal_score[:final_slots]
+            return eviction_candidates_idx, self.halo_nodes_rank[replace_candidates_idx[:final_slots]], final_slots
+
         replace_candidates, normal_score = self.find_replace_candidates()
         final_slots = min(max_eviction_slots, len(replace_candidates))
-        
         # truncate to final_slots
         replace_candidates = replace_candidates[:final_slots]
         eviction_candidates_idx = eviction_candidates_idx[:final_slots]
@@ -715,4 +716,7 @@ class Prefetch:
         return eviction_candidates_idx, replace_candidates, final_slots
 
     def close(self):
+        """Release thread-pool resources used by this prefetcher."""
+        if hasattr(self, "decision_log_file") and self.decision_log_file:
+            self.decision_log_file.close()
         self.executor.shutdown()

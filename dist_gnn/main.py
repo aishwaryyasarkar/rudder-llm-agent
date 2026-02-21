@@ -3,18 +3,14 @@ import os
 # Add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import argparse
-from collections import defaultdict
 import socket
 import dgl
 import dgl.distributed
 import numpy as np
 import torch as th
-import tqdm
-import cProfile
 import utils
 from trainer import Trainer
 import datetime
-import time
 from agents import start_ollama
 import signal
 import traceback
@@ -22,6 +18,7 @@ import traceback
 # Global variables for use in the signal handler
 global_ollama_proc = None
 global_ollama_port = None
+CLASSIFIER_MODELS = {"mlp", "tabnet", "lr", "rf", "xgb", "svm"}
 
 def cleanup_and_exit():
     """Ensure the Ollama server is stopped before exiting."""
@@ -141,7 +138,7 @@ def main(args):
     logdir = args.summary_filepath.replace(".txt", "")
     os.makedirs(logdir, exist_ok=True) 
 
-    if args.agent_model not in ("mlp", "tabnet"):
+    if args.decision_model not in CLASSIFIER_MODELS:
         """ Ollama Server """
         ollama_port = 11434 + local_rank
         global_ollama_port = ollama_port
@@ -178,7 +175,7 @@ def main(args):
     else:
         ollama_port = None
         global_ollama_port = None
-        print("Using MLP eviction agent, no Ollama server started.")
+        print("Using classifier decision model, no Ollama server started.")
 
     try:
         trainer = Trainer(args, device, data, utils.get_halos(g), ollama_port, local_rank, logdir)
@@ -339,7 +336,7 @@ if __name__ == "__main__":
         "--model", type=str, default="sage", help="Model to use for training. Accepts: graphsage or gat"
     )
     parser.add_argument(
-        "--agent_model", type=str, default="gemma", help="Agent model to use for eviction"
+        "--decision_model", type=str, default="gemma", help="Decision model for eviction. Use an LLM model name (agent) or one of: mlp/tabnet/lr/rf/xgb/svm (classifier)"
     )
     parser.add_argument(
         "--ml_model_dir", type=str, default="ml_models", help="Directory for the non-LLM model"
@@ -351,7 +348,7 @@ if __name__ == "__main__":
         "--ollama_models_dir", type=str, default=None, help="Path to Ollama models directory (defaults to OLLAMA_MODELS env var)"
     )
     parser.add_argument(
-        "--enable_finetune", type=utils.str2bool, default=False, help="Enable or disable finetuning of the agent model. Accepts: True or False"
+        "--enable_finetune", type=utils.str2bool, default=False, help="Enable or disable finetuning of classifier models. Accepts: True or False"
     )
 
     parser.add_argument("--finetune_interval", type=int, nargs="?", const=50, default=None, help="Interval for finetuning; if provided without a value, defaults to 50.")
@@ -361,9 +358,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    # if enable finetune is True, agent_model must be mlp and tabnet
-    if args.enable_finetune and args.agent_model not in ["mlp", "tabnet", "lr", "rf", "xgb", "svm"]:
-        raise ValueError("Finetuning is only supported for MLP and TabNet agent models.")
+    if args.enable_finetune and args.decision_model not in CLASSIFIER_MODELS:
+        raise ValueError("Finetuning is only supported for classifier models: mlp/tabnet/lr/rf/xgb/svm.")
 
     if args.model == "gat":
         assert args.num_heads > 0, "Number of attention heads must be greater than 0"
@@ -371,6 +367,6 @@ if __name__ == "__main__":
     if args.model not in ["sage", "gat"]:
         raise ValueError("Model not supported. Please choose either graphsage or gat.")
     
-    if args.agent_model is None:
-        raise ValueError("Agent model must be specified. Please choose either llms or mlp.")
+    if args.decision_model is None:
+        raise ValueError("Decision model must be specified.")
     main(args)

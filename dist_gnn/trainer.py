@@ -2,8 +2,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from prefetch.prefetch import Prefetch
-from prefetch.prefetch_efficient import MemoryEfficientPrefetcher
+from prefetch.prefetch import PrefetchBuffer
 from models.graphsage import DistSAGE
 from models.gat import GAT
 import utils
@@ -27,19 +26,17 @@ class Trainer:
         self.halo_nodes = halo_nodes
         self.train_nid, self.val_nid, self.test_nid, self.in_feats, self.n_classes, self.g = self.data
         print(f"Number of classes: {self.n_classes}, Number of features: {self.in_feats}")
-        # Detect multi-label datasets (e.g., Yelp has [N, C] multi-hot labels)
-        labels_store = self.g.ndata["labels"]
+        labels_store = self.g.ndata["labels"] # Detect multi-label datasets (e.g., Yelp has [N, C] multi-hot labels)
         try:
-            shp = labels_store.shape          # DistTensor has .shape
+            shp = labels_store.shape # DistTensor has .shape
             n_dims = len(shp)
         except Exception:
-            # Fallback: probe a tiny slice (returns a torch.Tensor)
-            probe = self.g.ndata["labels"][self.train_nid[:1]]
+            probe = self.g.ndata["labels"][self.train_nid[:1]] # Fallback: probe a tiny slice (returns a torch.Tensor)
             shp = probe.shape
             n_dims = probe.ndim
+
         # Multi-label iff [N, C] with C > 1
         self.is_multilabel = (n_dims == 2 and shp[-1] > 1)
-
         self.num_mini_batches = math.ceil(len(self.train_nid) / self.args.batch_size)
         self.metadata = {
             "dataset": self.args.graph_name,
@@ -49,7 +46,6 @@ class Trainer:
             "minibatch_size": self.args.batch_size,
             "total_minibatches": self.num_mini_batches * self.args.num_epochs,
             "num_remote_nodes": len(self.halo_nodes),
-            # "buffer_size": self.prefetcher.buffer_length
         }
         if args.use_memory_efficient_prefetcher is None:
             use_memory_efficient_prefetcher = (args.graph_name == "ogbn-papers100M")
@@ -58,12 +54,13 @@ class Trainer:
 
         if use_memory_efficient_prefetcher:
             print("Using memory efficient prefetcher")
-            self.prefetcher = MemoryEfficientPrefetcher(
-                self.g, self.halo_nodes, self.train_nid, self.device, self.args, self.metadata, ollama_port, local_rank, logdir
+            self.prefetcher = PrefetchBuffer(
+                self.g, self.halo_nodes, self.train_nid, self.device, self.args, self.metadata, ollama_port, local_rank, logdir,
+                memory_efficient=True
             )
         else:
             print("Using standard prefetcher")
-            self.prefetcher = Prefetch(
+            self.prefetcher = PrefetchBuffer(
                 self.g, self.halo_nodes, self.train_nid, self.device, self.args, self.metadata, ollama_port, local_rank, logdir
             )
 
@@ -114,6 +111,7 @@ class Trainer:
             print("No eviction")
 
         print(f"Total mini batches: {self.num_mini_batches * self.args.num_epochs}")
+
     def _multilabel_f1(self, logits, labels, thr=0.5, eps=1e-9):
         pred = (logits.sigmoid() > thr).to(labels.dtype)
         lab  = labels
@@ -124,7 +122,6 @@ class Trainer:
         rec  = tp / (tp + fn + eps)
         return 2 * prec * rec / (prec + rec + eps)
         
-
     def evaluate(self):
         self.model.module.eval()
         with th.no_grad():
@@ -389,5 +386,4 @@ class Trainer:
                 self.prefetcher.period, self.prefetcher.threshold, absolute_total_time, prefetch_time)
 
     def __del__(self):
-        if hasattr(self, "llm_file") and self.llm_file:
-            self.llm_file.close()
+        pass

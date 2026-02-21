@@ -3,15 +3,9 @@ import joblib
 import torch
 from agents.ml_agents.mlp.mlp import MLPClassifier
 import pandas as pd
-from typing import Dict
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
 from collections import OrderedDict
 from pytorch_tabnet.tab_model import TabNetClassifier
 from torch.utils.data import TensorDataset, DataLoader
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, classification_report
 import numpy as np
 from xgboost import XGBClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -38,7 +32,7 @@ def label_stream(metrics_stream: list[dict]) -> list[int]:
         labels.append(compute_eviction_label(prev, curr))
     return labels
 
-class MLPEvictionAgent:
+class MLPEvictionClassifier:
     """
     Loads a trained MLP model to decide whether to evict a node based on the metrics
     """
@@ -192,7 +186,7 @@ class MLPEvictionAgent:
                     self._optimizer.step()
         self.model.eval()
 
-class TabNetEvictionAgent:
+class TabNetEvictionClassifier:
     """
     TabNet-based eviction agent with periodic online head fine-tuning using tensors.
     """
@@ -314,7 +308,7 @@ class TabNetEvictionAgent:
             }
         return decision
 
-class LogisticRegressionEvictionAgent:
+class LogisticRegressionEvictionClassifier:
     """
     Eviction agent backed by a trained Logistic Regression model.
     Uses the same static features & preprocessing pipeline as the MLP/TabNet agents.
@@ -376,7 +370,7 @@ class LogisticRegressionEvictionAgent:
         print(f"LR eviction probability: {proba:.4f}, decision: {decision}")
         return decision
 
-class RandomForestEvictionAgent:
+class RandomForestEvictionClassifier:
     """
     Eviction agent backed by a trained Random Forest classifier.
     """
@@ -431,7 +425,7 @@ class RandomForestEvictionAgent:
         print(f"RF eviction probability: {proba:.4f}, decision: {decision}")
         return decision
 
-class SVMEvictionAgent:
+class SVMEvictionClassifier:
     """
     Eviction agent backed by a trained linear SVM (LinearSVC).
     Note: LinearSVC does not expose calibrated probabilities; we use the class label directly.
@@ -484,7 +478,7 @@ class SVMEvictionAgent:
         print(f"LinearSVM eviction label: {label}, decision: {decision}")
         return decision
 
-class XGBoostEvictionAgent:
+class XGBoostEvictionClassifier:
     """
     Eviction agent backed by a trained XGBoost classifier.
     """

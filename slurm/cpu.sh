@@ -27,13 +27,13 @@ PARTITION_DIR=${16}
 CUTOFF=${17}
 PREFETCHER_INIT=${18}
 REUSE_TRACKER=${19}
-AGENT_MODEL=${20}
-ENABLE_FINETUNE=${21} # whether to enable finetuning of the agent model
+DECISION_MODEL=${20}
+ENABLE_FINETUNE=${21} # whether to enable finetuning of the decision model
 ML_MODEL_DIR=${22} # optional override for non-LLM model directory
 JOBID=$SLURM_JOB_ID
 
 if [ -z "$ML_MODEL_DIR" ]; then
-    ML_MODEL_DIR="$PROJ_PATH/ml_models/$AGENT_MODEL/trained_model"
+    ML_MODEL_DIR="$PROJ_PATH/ml_models/$DECISION_MODEL/trained_model"
 fi
 
 NODELIST=$(scontrol show hostnames $SLURM_JOB_NODELIST) # get list of nodes
@@ -139,7 +139,7 @@ if [ "$MODEL" == "sage" ]; then
     --model $MODEL \
     --eviction_cutoff $CUTOFF \
     --prefetcher_init $PREFETCHER_INIT \
-    --agent_model $AGENT_MODEL \
+    --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \
     --enable_finetune $ENABLE_FINETUNE"
 fi

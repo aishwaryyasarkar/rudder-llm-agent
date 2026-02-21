@@ -70,8 +70,8 @@ CUTOFF=${CUTOFF:-${17}}
 PREFETCHER_INIT=${PREFETCHER_INIT:-${18}}
 INTERACTIVE=${INTERACTIVE:-${19}}
 REUSE_TRACKER=${REUSE_TRACKER:-${20}}
-AGENT_MODEL=${AGENT_MODEL:-${21}}
-ENABLE_FINETUNE=${ENABLE_FINETUNE:-${22}} # whether to enable finetuning of the agent model
+DECISION_MODEL=${DECISION_MODEL:-${21}}
+ENABLE_FINETUNE=${ENABLE_FINETUNE:-${22}} # whether to enable finetuning of the decision model
 FINETUNE_INTERVAL=${FINETUNE_INTERVAL:-${23}} # finetune interval, if finetuning is enabled
 BATCH_SIZE=${BATCH_SIZE:-${24}} # batch size for training
 BATCHSIZE_EXP=${BATCHSIZE_EXP:-${25}} # whether to run experiments with different batch sizes
@@ -89,7 +89,7 @@ echo "DELTA: $DELTA"
 echo "ALPHAS: $ALPHAS"
 echo "Interactive mode: $INTERACTIVE"
 echo "Reuse tracker: $REUSE_TRACKER"
-echo "Agent model: $AGENT_MODEL"
+echo "Decision model: $DECISION_MODEL"
 echo "Enable finetuning: $ENABLE_FINETUNE"
 
 
@@ -121,7 +121,7 @@ for n in $NUM_NODES; do
                         echo "Submitting job for $NUM_NODES nodes with prefetch fraction $fp, delta $delta, alpha $alpha, finetune interval $finetune_interval"
 
                         CMD="bash submit.sh "$MODE" "$BACKEND" "$fp" "$delta" "$alpha" "$HIT_RATE" "$DATASET_NAME" "$n" "$NUM_TRAINERS" "$NUM_SAMPLER_PROCESSES" "$MODEL" "$QUEUE" "$LOGS_DIR" "$DATA_DIR" "$PROJ_PATH" "$NEW_PARTITION_DIR" \
-                            "$PARTITION_METHOD" "$CUTOFF" "$PREFETCHER_INIT" "$INTERACTIVE" "$REUSE_TRACKER" "$AGENT_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR""
+                            "$PARTITION_METHOD" "$CUTOFF" "$PREFETCHER_INIT" "$INTERACTIVE" "$REUSE_TRACKER" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR""
                         eval $CMD
                         done
                 done

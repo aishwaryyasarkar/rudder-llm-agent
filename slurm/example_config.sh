@@ -28,12 +28,12 @@ CUTOFF="0"
 PREFETCHER_INIT="empty"           # degree | empty | random 
 INTERACTIVE="false"                # true | false
 REUSE_TRACKER="false"              # currently ignored by runtime scripts
-AGENT_MODEL="gemma"                # llm model name or mlp/tabnet/lr/rf/xgb/svm
+DECISION_MODEL="gemma"                # llm model name or mlp/tabnet/lr/rf/xgb/svm
 ENABLE_FINETUNE="false"
 FINETUNE_INTERVAL="50"
 BATCH_SIZE="2000"
 BATCHSIZE_EXP="false"
 
 # Optional explicit model directory override for non-LLM agents.
-# If empty, scripts fallback to: ${PROJ_PATH}/ml_models/${AGENT_MODEL}/trained_model
+# If empty, scripts fallback to: ${PROJ_PATH}/ml_models/${DECISION_MODEL}/trained_model
 ML_MODEL_DIR=""

@@ -1,6 +1,5 @@
 import time
 import random
-import numpy as np
 from ollama import Client
 import requests
 
@@ -314,4 +313,3 @@ Dynamic Message:
         )
         end_time = time.time()
         print(f"LLM warmup took {end_time - start_time:.2f} seconds. Warmup response:\n{response.message.content.strip()}")
-

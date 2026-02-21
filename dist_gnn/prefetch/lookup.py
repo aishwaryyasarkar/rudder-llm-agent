@@ -1,12 +1,10 @@
-import numba
-from numba import jit, prange, njit, get_num_threads, config, threading_layer
+from numba import jit, prange
 import numpy as np
 
 @jit(nopython=True, parallel=True)
 def lookup(input_nodes_array, prefetch_ids, buffer_length, eviction_score, decay):
     """
     Performs parallel lookup operation on the input_nodes_array using the prefetch_ids.
-
     Args:
         input_nodes_array (numpy.ndarray): An array of input node IDs.
         prefetch_ids (numpy.ndarray): An array of prefetch IDs.

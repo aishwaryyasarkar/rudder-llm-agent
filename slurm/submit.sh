@@ -20,15 +20,15 @@ CUTOFF=${18}
 PREFETCHER_INIT=${19}
 INTERACTIVE=${20}
 REUSE_TRACKER=${21}
-AGENT_MODEL=${22}
+DECISION_MODEL=${22}
 BATCH_SIZE=${23} # batch size for training
 BATCHSIZE_EXP=${24} # whether to run experiments with different batch sizes
-ENABLE_FINETUNE=${25} # whether to enable finetuning of the agent model
+ENABLE_FINETUNE=${25} # whether to enable finetuning of the decision model
 FINETUNE_INTERVAL=${26} # finetune interval, if finetuning is enabled
 ML_MODEL_DIR=${27} # optional override for non-LLM model directory
 
 echo "Interactive mode: $INTERACTIVE"
-# echo "Agent model: $AGENT_MODEL"
+# echo "Decision model: $DECISION_MODEL"
 if [ "$MODE" == "cpu" ]; then
     BACKEND=$2
     # if backend is not passed as argument, throw error
@@ -84,7 +84,7 @@ for DATASET in $DATASET_NAME; do
                 for TRAINERS in $NUM_TRAINERS; do
                     # if interactive mode is true, replace %j with slurmid
                     NAME="${DATASET}_${PARTITION}_n${NODES}_samp${SAMPLER_PROCESSES}_trainer${TRAINERS}"
-                    JOBNAME="as-${AGENT_MODEL}_${MODE}_PF${PREFETCH_FRACTION}_P${EVICTION_PERIOD}_a${ALPHA}_${HIT_RATE}_${MODEL}_${NAME}_finetune_${ENABLE_FINETUNE}_interval_${FINETUNE_INTERVAL}_batchsize_${BATCH_SIZE}"
+                    JOBNAME="as-${DECISION_MODEL}_${MODE}_PF${PREFETCH_FRACTION}_P${EVICTION_PERIOD}_a${ALPHA}_${HIT_RATE}_${MODEL}_${NAME}_finetune_${ENABLE_FINETUNE}_interval_${FINETUNE_INTERVAL}_batchsize_${BATCH_SIZE}"
                     if [ "$INTERACTIVE" == "true" ]; then
                         OUTFILE="${LOGS_DIR}/${NAME}_${SLURM_JOB_ID}.out"
                         ERRFILE="${LOGS_DIR}/${NAME}_${SLURM_JOB_ID}.err"
@@ -154,12 +154,12 @@ for DATASET in $DATASET_NAME; do
                         if [ "$MODE" == "gpu" ]; then
                             CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
                             $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $AGENT_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
+                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
                         elif [ "$MODE" == "cpu" ]; then
                             CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
                             $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
                             $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR \
-                            $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $AGENT_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
+                            $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
                         fi 
                     else
                         echo "-----------------------------------------------------"
@@ -170,15 +170,15 @@ for DATASET in $DATASET_NAME; do
                         echo "Eviction Period: $EVICTION_PERIOD"
                         echo "Prefetch Fraction: $PREFETCH_FRACTION"
                         echo "Alpha: $ALPHA"
-                        echo "Agent Model: $AGENT_MODEL"
+                        echo "Decision Model: $DECISION_MODEL"
                         if [ "$MODE" == "gpu" ]; then
                             CMD="bash interactive-gpu.sh  $DATASET $PARTITION \
                             $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $AGENT_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
+                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
                         elif [ "$MODE" == "cpu" ]; then
                             CMD="bash interactive-cpu.sh $DATASET $PARTITION \
                             $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA $HIT_RATE \
-                            $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $AGENT_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
+                            $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
                         fi
                     fi             
                     # Submit the job

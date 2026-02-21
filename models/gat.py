@@ -3,12 +3,7 @@ import dgl.nn.pytorch as dglnn
 import numpy as np
 import torch as th
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import tqdm
-import cProfile
-import sys, os
-import math
 
 class GAT(nn.Module):
     def __init__(

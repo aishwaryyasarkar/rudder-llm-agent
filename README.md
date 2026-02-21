@@ -17,16 +17,15 @@ rudder-gnn/
 │   ├── utils.py               # Helper utilities
 │   └── prefetch/
 │       ├── prefetch.py        # Standard prefetcher
-│       ├── prefetch_efficient.py  # MemoryEfficientPrefetcher
 │       └── lookup.py
 ├── models/                    # GNN models
 │   ├── graphsage.py
 │   └── gat.py
 ├── agents/                    # Eviction agents + Ollama server helper
 │   ├── local_agents.py
-│   ├── non_llm_agents.py
+│   ├── non_llm_classifiers.py
 │   └── start_ollama.py
-├── ml_models/                 # Offline training scripts for non-LLM agents
+├── ml_models/                 # Offline training scripts for non-LLM classifiers
 │   ├── mlp/mlp.py
 │   ├── tabnet/tabnet.py
 │   ├── lr/lr.py
@@ -108,7 +107,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull gemma
 ```
 
-You can replace `gemma` with any model string you plan to pass to `--agent_model`.
+You can replace `gemma` with any model string you plan to pass to `--decision_model`.
 
 ### 5) Optional Ollama Environment Variables
 
@@ -134,10 +133,10 @@ Update:
 - `slurm/example_config.sh`
 
 Key fields:
-- `MODE`, `MODEL`, `AGENT_MODEL`
+- `MODE`, `MODEL`, `DECISION_MODEL`
 - `DATASET_NAME`, `NUM_NODES`, `NUM_TRAINERS`
 - `PROJ_PATH`, `PARTITION_DIR`, `LOGS_DIR`, `DATA_DIR`
-- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/ml_models/$AGENT_MODEL/trained_model"`)
+- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/ml_models/$DECISION_MODEL/trained_model"`)
 
 ### Step 2: Launch from `slurm/` Directory
 
@@ -207,14 +206,14 @@ if [ "$MODEL" == "sage" ]; then
       --model $MODEL \
       --eviction_cutoff $CUTOFF \
       --prefetcher_init $PREFETCHER_INIT \
-      --agent_model $AGENT_MODEL \
+      --decision_model $DECISION_MODEL \
       --ml_model_dir $ML_MODEL_DIR \
       --enable_finetune $ENABLE_FINETUNE \
       --finetune_interval $FINETUNE_INTERVAL"
 fi
 ```
 
-### Example: Non-LLM Agent
+### Example: Classifier Decision Model
 
 ```bash
 python dist_gnn/main.py \
@@ -223,7 +222,7 @@ python dist_gnn/main.py \
   --part_config /path/to/graph_partition.json \
   --summary_filepath /path/to/results/summary.txt \
   --local-rank 0 \
-  --agent_model lr \
+  --decision_model lr \
   --ml_model_dir /path/to/trained_ml_models \
   --model sage
 ```
@@ -252,9 +251,9 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - `--model`: GNN model (`sage` or `gat`).
 - `--eviction_cutoff`: optional cutoff for eviction candidate selection.
 - `--prefetcher_init`: prefetch buffer initialization mode (`degree`, `empty`, `random`).
-- `--agent_model`: eviction agent model.
-  - Non-LLM: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`
-  - LLM: any Ollama model name string
+- `--decision_model`: eviction decision model.
+  - Classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`
+  - Agent models (LLM): any Ollama model name string
 - `--ml_model_dir`: directory of non-LLM model artifacts.
 - `--enable_finetune`: enable/disable online finetuning for supported agents.
 - `--finetune_interval`: interval used when finetuning is enabled.
@@ -276,9 +275,9 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - Optional binary from `--ollama_bin` or env `OLLAMA_BIN` (default: `ollama`)
 
 Current runtime note:
-- In `dist_gnn/main.py`, Ollama startup is skipped only when `--agent_model` is `mlp` or `tabnet`.
+- In `dist_gnn/main.py`, Ollama startup is skipped for classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`.
 
-## Training Non-LLM Agent Models
+## Training Non-LLM Classifier Models
 
 Each script in `ml_models/*/*.py` supports:
 - `--train_csv`
@@ -329,7 +328,7 @@ Training runtime:
 - Summary metrics appended to `--summary_filepath`
 - Rank-specific runtime logs under a directory derived from `summary_filepath`
 
-Non-LLM model training:
+Non-LLM classifier training:
 - Preprocessor: `eviction_preprocessor.joblib`
 - Model artifacts (e.g., `lr_eviction.joblib`, `rf_eviction.joblib`, `svm_eviction.joblib`, `xgb_eviction.json`, `tabnet_eviction.zip`, `mlp_eviction.pth`)
 
