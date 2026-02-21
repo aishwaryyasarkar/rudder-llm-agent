@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numba
 from .lookup import lookup, update_normal_scores, update_normal_score_of_evicted_nodes
 from agents.local_agents import SharedStateStore, MetricsCollectionAgent, ContextAnalysisAgent, DecisionMakingLLMAgent
-from agents.non_llm_classifiers import MLPEvictionClassifier, TabNetEvictionClassifier, LogisticRegressionEvictionClassifier, RandomForestEvictionClassifier, XGBoostEvictionClassifier, SVMEvictionClassifier
+from agents.classifiers import MLPEvictionClassifier, TabNetEvictionClassifier, LogisticRegressionEvictionClassifier, RandomForestEvictionClassifier, XGBoostEvictionClassifier, SVMEvictionClassifier
 import queue
 import threading
 

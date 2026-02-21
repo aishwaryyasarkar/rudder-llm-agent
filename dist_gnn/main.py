@@ -339,7 +339,7 @@ if __name__ == "__main__":
         "--decision_model", type=str, default="gemma", help="Decision model for eviction. Use an LLM model name (agent) or one of: mlp/tabnet/lr/rf/xgb/svm (classifier)"
     )
     parser.add_argument(
-        "--ml_model_dir", type=str, default="ml_models", help="Directory for the non-LLM model"
+        "--ml_model_dir", type=str, default="classifier_models", help="Directory for the non-LLM model"
     )
     parser.add_argument(
         "--ollama_bin", type=str, default=None, help="Path to ollama executable (defaults to OLLAMA_BIN env var or 'ollama')"

@@ -23,9 +23,9 @@ rudder-gnn/
 │   └── gat.py
 ├── agents/                    # Eviction agents + Ollama server helper
 │   ├── local_agents.py
-│   ├── non_llm_classifiers.py
+│   ├── classifiers.py
 │   └── start_ollama.py
-├── ml_models/                 # Offline training scripts for non-LLM classifiers
+├── classifier_models/                 # Offline training scripts for non-LLM classifiers
 │   ├── mlp/mlp.py
 │   ├── tabnet/tabnet.py
 │   ├── lr/lr.py
@@ -136,7 +136,7 @@ Key fields:
 - `MODE`, `MODEL`, `DECISION_MODEL`
 - `DATASET_NAME`, `NUM_NODES`, `NUM_TRAINERS`
 - `PROJ_PATH`, `PARTITION_DIR`, `LOGS_DIR`, `DATA_DIR`
-- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/ml_models/$DECISION_MODEL/trained_model"`)
+- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"`)
 
 ### Step 2: Launch from `slurm/` Directory
 
@@ -223,7 +223,7 @@ python dist_gnn/main.py \
   --summary_filepath /path/to/results/summary.txt \
   --local-rank 0 \
   --decision_model lr \
-  --ml_model_dir /path/to/trained_ml_models \
+  --ml_model_dir /path/to/trained_classifier_models \
   --model sage
 ```
 
@@ -279,7 +279,7 @@ Current runtime note:
 
 ## Training Non-LLM Classifier Models
 
-Each script in `ml_models/*/*.py` supports:
+Each script in `classifier_models/*/*.py` supports:
 - `--train_csv`
 - `--test_csv`
 - `--model_dir`
@@ -287,19 +287,19 @@ Each script in `ml_models/*/*.py` supports:
 ### Example: Logistic Regression
 
 ```bash
-python ml_models/lr/lr.py \
+python classifier_models/lr/lr.py \
   --train_csv /path/to/training_dataset.csv \
   --test_csv /path/to/test_dataset.csv \
-  --model_dir /path/to/ml_models/lr_trained
+  --model_dir /path/to/classifier_models/lr_trained
 ```
 
 ### Example: MLP
 
 ```bash
-python ml_models/mlp/mlp.py \
+python classifier_models/mlp/mlp.py \
   --train_csv /path/to/training_dataset.csv \
   --test_csv /path/to/test_dataset.csv \
-  --model_dir /path/to/ml_models/mlp_trained
+  --model_dir /path/to/classifier_models/mlp_trained
 ```
 
 ## Expected Non-LLM CSV Schema

@@ -35,7 +35,7 @@ TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
 JOBID=$SLURM_JOB_ID
 
 if [ -z "$ML_MODEL_DIR" ]; then
-    ML_MODEL_DIR="$PROJ_PATH/ml_models/$DECISION_MODEL/trained_model"
+    ML_MODEL_DIR="$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"
 fi
 
 NODELIST=$(scontrol show hostnames $SLURM_JOB_NODELIST) # get list of nodes

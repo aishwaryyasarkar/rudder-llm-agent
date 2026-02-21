@@ -35,5 +35,5 @@ BATCH_SIZE="2000"
 BATCHSIZE_EXP="false"
 
 # Optional explicit model directory override for non-LLM agents.
-# If empty, scripts fallback to: ${PROJ_PATH}/ml_models/${DECISION_MODEL}/trained_model
+# If empty, scripts fallback to: ${PROJ_PATH}/classifier_models/${DECISION_MODEL}/trained_model
 ML_MODEL_DIR=""
