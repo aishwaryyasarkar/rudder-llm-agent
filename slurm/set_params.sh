@@ -119,9 +119,12 @@ for n in $NUM_NODES; do
                         NEW_PARTITION_DIR="${PARTITION_DIR}/${PARTITION_METHOD}/${DATASET_NAME}/${n}_parts/${DATASET_NAME}.json"
                         echo "Submitting job for $NUM_NODES nodes with prefetch fraction $fp, delta $delta, alpha $alpha, finetune interval $finetune_interval"
 
-                        CMD="bash submit.sh "$MODE" "$BACKEND" "$fp" "$delta" "$alpha" "$HIT_RATE" "$DATASET_NAME" "$n" "$NUM_TRAINERS" "$NUM_SAMPLER_PROCESSES" "$MODEL" "$QUEUE" "$LOGS_DIR" "$DATA_DIR" "$PROJ_PATH" "$NEW_PARTITION_DIR" \
-                            "$PARTITION_METHOD" "$PREFETCHER_INIT" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR" "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR""
-                        eval $CMD
+                        bash submit.sh \
+                            "$MODE" "$BACKEND" "$fp" "$delta" "$alpha" "$HIT_RATE" "$DATASET_NAME" "$n" \
+                            "$NUM_TRAINERS" "$NUM_SAMPLER_PROCESSES" "$MODEL" "$QUEUE" "$LOGS_DIR" "$DATA_DIR" \
+                            "$PROJ_PATH" "$NEW_PARTITION_DIR" "$PARTITION_METHOD" "$PREFETCHER_INIT" \
+                            "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" \
+                            "$ML_MODEL_DIR" "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR"
                         done
                 done
             done

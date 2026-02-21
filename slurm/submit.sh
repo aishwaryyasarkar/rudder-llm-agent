@@ -142,17 +142,18 @@ for DATASET in $DATASET_NAME; do
                     echo "Alpha: $ALPHA"
                     echo "Time: $TIME"
                     if [ "$MODE" == "gpu" ]; then
-                        CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
-                        $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                        $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR $OLLAMA_BIN $OLLAMA_MODELS_DIR"
+                        sbatch -N "$NODES" -q "$QUEUE" --job-name "$JOBNAME" -o "$OUTFILE" -e "$ERRFILE" --time="$TIME" "$SCRIPT" \
+                            "$DATASET" "$PARTITION" "$NODES" "$SAMPLER_PROCESSES" "$SUMMARYFILE" "$IP_CONFIG_FILE" "$TRAINERS" "$BACKEND" \
+                            "$EVICTION_PERIOD" "$PREFETCH_FRACTION" "$ALPHA" "$HIT_RATE" "$MODEL" "$DATA_DIR" "$PROJ_PATH" "$PARTITION_DIR" \
+                            "$PREFETCHER_INIT" "$DECISION_MODEL" "$ENABLE_FINETUNE" "$BATCH_SIZE" "$FINETUNE_INTERVAL" "$ML_MODEL_DIR" \
+                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR"
                     elif [ "$MODE" == "cpu" ]; then
-                        CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
-                        $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                        $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR \
-                        $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR $OLLAMA_BIN $OLLAMA_MODELS_DIR"
+                        sbatch -N "$NODES" -q "$QUEUE" --job-name "$JOBNAME" -o "$OUTFILE" -e "$ERRFILE" --time="$TIME" "$SCRIPT" \
+                            "$DATASET" "$PARTITION" "$NODES" "$SAMPLER_PROCESSES" "$SUMMARYFILE" "$IP_CONFIG_FILE" "$BACKEND" "$TRAINERS" \
+                            "$EVICTION_PERIOD" "$PREFETCH_FRACTION" "$ALPHA" "$HIT_RATE" "$MODEL" "$DATA_DIR" "$PROJ_PATH" "$PARTITION_DIR" \
+                            "$PREFETCHER_INIT" "$DECISION_MODEL" "$ENABLE_FINETUNE" "$BATCH_SIZE" "$FINETUNE_INTERVAL" "$ML_MODEL_DIR" \
+                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR"
                     fi
-                    # Submit the job
-                    eval $CMD
                 done
             done
         done
