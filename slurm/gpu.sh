@@ -30,6 +30,8 @@ ENABLE_FINETUNE=${19} # whether to enable finetuning of the decision model
 BATCH_SIZE=${20} # batch size for training
 FINETUNE_INTERVAL=${21} # finetune interval, if finetuning is enabled
 ML_MODEL_DIR=${22} # optional override for non-LLM model directory
+OLLAMA_BIN=${23} # optional override for ollama executable
+OLLAMA_MODELS_DIR=${24} # optional override for ollama models directory
 TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
 JOBID=$SLURM_JOB_ID
 
@@ -144,6 +146,8 @@ if [ "$MODEL" == "sage" ]; then
     --prefetcher_init $PREFETCHER_INIT \
     --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \
+    --ollama_bin $OLLAMA_BIN \
+    --ollama_models_dir $OLLAMA_MODELS_DIR \
     --enable_finetune $ENABLE_FINETUNE \
     --finetune_interval $FINETUNE_INTERVAL"
 fi

@@ -28,6 +28,8 @@ PREFETCHER_INIT=${17}
 DECISION_MODEL=${18}
 ENABLE_FINETUNE=${19} # whether to enable finetuning of the decision model
 ML_MODEL_DIR=${20} # optional override for non-LLM model directory
+OLLAMA_BIN=${21} # optional override for ollama executable
+OLLAMA_MODELS_DIR=${22} # optional override for ollama models directory
 JOBID=$SLURM_JOB_ID
 
 if [ -z "$ML_MODEL_DIR" ]; then
@@ -138,6 +140,8 @@ if [ "$MODEL" == "sage" ]; then
     --prefetcher_init $PREFETCHER_INIT \
     --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \
+    --ollama_bin $OLLAMA_BIN \
+    --ollama_models_dir $OLLAMA_MODELS_DIR \
     --enable_finetune $ENABLE_FINETUNE"
 fi
 if [ "$MODEL" == "gat" ]; then

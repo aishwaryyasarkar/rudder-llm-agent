@@ -73,6 +73,8 @@ FINETUNE_INTERVAL=${FINETUNE_INTERVAL:-${20}} # finetune interval, if finetuning
 BATCH_SIZE=${BATCH_SIZE:-${21}} # batch size for training
 BATCHSIZE_EXP=${BATCHSIZE_EXP:-${22}} # whether to run experiments with different batch sizes
 ML_MODEL_DIR=${ML_MODEL_DIR:-${23}} # optional override for non-LLM model directory
+OLLAMA_BIN=${OLLAMA_BIN:-${24}} # optional override for ollama executable
+OLLAMA_MODELS_DIR=${OLLAMA_MODELS_DIR:-${25}} # optional override for ollama models directory
 
 # Validate that all required arguments are provided
 if [ -z "$MODE" ] || [ -z "$HIT_RATE" ] || [ -z "$MODEL" ] || [ -z "$FP" ] || [ -z "$DELTA" ] || [ -z "$ALPHAS" ] || [ -z "$DATASET_NAME" ] || [ -z "$NUM_NODES" ] || [ -z "$NUM_TRAINERS" ] || [ -z "$NUM_SAMPLER_PROCESSES" ] || [ -z "$QUEUE" ] || [ -z "$LOGS_DIR" ] || [ -z "$DATA_DIR" ] || [ -z "$PROJ_PATH" ] || [ -z "$PARTITION_DIR" ] || [ -z "$PARTITION_METHOD" ]; then
@@ -86,6 +88,8 @@ echo "DELTA: $DELTA"
 echo "ALPHAS: $ALPHAS"
 echo "Decision model: $DECISION_MODEL"
 echo "Enable finetuning: $ENABLE_FINETUNE"
+echo "Ollama bin: $OLLAMA_BIN"
+echo "Ollama models dir: $OLLAMA_MODELS_DIR"
 
 
 if [ "$ENABLE_FINETUNE" = "true" ]; then
@@ -116,7 +120,7 @@ for n in $NUM_NODES; do
                         echo "Submitting job for $NUM_NODES nodes with prefetch fraction $fp, delta $delta, alpha $alpha, finetune interval $finetune_interval"
 
                         CMD="bash submit.sh "$MODE" "$BACKEND" "$fp" "$delta" "$alpha" "$HIT_RATE" "$DATASET_NAME" "$n" "$NUM_TRAINERS" "$NUM_SAMPLER_PROCESSES" "$MODEL" "$QUEUE" "$LOGS_DIR" "$DATA_DIR" "$PROJ_PATH" "$NEW_PARTITION_DIR" \
-                            "$PARTITION_METHOD" "$PREFETCHER_INIT" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR""
+                            "$PARTITION_METHOD" "$PREFETCHER_INIT" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR" "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR""
                         eval $CMD
                         done
                 done
