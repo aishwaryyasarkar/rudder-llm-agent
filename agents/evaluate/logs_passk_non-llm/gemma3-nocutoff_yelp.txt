@@ -1,0 +1,60 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41485021 0.25                  2656         2.58   (-10.31 to +14.66)       2592        10.01
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625793 0.25                  1177         2.64     (-4.02 to +8.42)       1161        24.10
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625798 0.25                  2148         2.52    (-6.10 to +10.12)       2116        14.96
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41625501 0.25                   577         2.88    (-4.67 to +14.39)        569        30.17
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767481 0.25                  2359         3.54     (-6.10 to +8.67)       2295        15.18
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767480 0.25                  2503         3.63    (-8.24 to +11.72)       2439        20.42
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41625000 0.25                   548         3.07    (-4.10 to +12.63)        540        43.28
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625792 0.25                  1275         2.72     (-2.85 to +5.98)       1259        32.22
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41774132 0.25                  2246         2.71     (-4.40 to +7.29)       2214        20.07
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41776164 0.25                  1206         2.78     (-2.68 to +5.61)       1190        20.91
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41778830 0.25                  2209         2.65     (-3.03 to +5.02)       2177        13.42
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767482 0.25                  2281         3.29     (-6.04 to +8.58)       2217        13.00
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41625502 0.25                   790         3.08     (-2.50 to +7.70)        782        28.16
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41624989 0.25                   395         2.88    (-6.83 to +21.04)        387        62.20
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625791 0.25                  1602         3.03     (-2.87 to +6.01)       1586        54.43
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625795 0.25                  2325         2.85    (-6.52 to +10.81)       2293        32.11
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767479 0.25                  2637         3.48   (-13.52 to +19.23)       2573        26.32
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41485004 0.25                  1836         2.68    (-6.34 to +10.51)       1804        13.49
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41485003 0.25                  1021         2.63    (-5.02 to +10.51)       1005        20.61
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625789 0.05                  2242         2.78     (-5.80 to +9.62)       2210        15.65
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767452 0.05                  2899         3.19     (-6.65 to +9.46)       2835        12.62
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625783 0.05                   809         3.15    (-5.50 to +11.53)        793        25.67
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41625499 0.05                   610         3.03    (-3.71 to +11.44)        602        30.67
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41484707 0.05                  1022         2.57     (-3.06 to +9.42)       1014        22.01
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41484993 0.05                  1197         2.93    (-4.89 to +10.24)       1181        20.82
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625786 0.05                  1950         3.02     (-4.65 to +7.71)       1918        20.56
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625782 0.05                   950         3.01    (-6.98 to +14.62)        934        32.50
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767451 0.05                  2920         3.31    (-8.41 to +11.96)       2856        16.36
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41624999 0.05                   502         2.80   (-12.74 to +39.21)        494        34.22
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41485020 0.05                  2998         2.56    (-9.27 to +13.18)       2934         9.18
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41625500 0.05                   582         3.16    (-3.66 to +11.26)        574        26.67
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625784 0.05                  1066         3.02     (-4.07 to +8.53)       1050        20.81
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767453 0.05                  2662         3.14     (-6.35 to +9.03)       2598        11.45
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625790 0.05                  2237         2.65     (-3.88 to +6.43)       2205        11.94
+gemma3-nocutoff      yelp            yelp_metis_n16_samp0_trainer4_41767450 0.05                  4647         2.80     (-4.81 to +6.84)       4583        19.26
+gemma3-nocutoff      yelp            yelp_metis_n2_samp0_trainer4_41624988 0.05                   372         3.33    (-3.35 to +10.31)        364        62.30
+gemma3-nocutoff      yelp            yelp_metis_n4_samp0_trainer4_41625781 0.05                   886         3.47     (-4.00 to +8.38)        870        55.40
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41625785 0.05                  1967         3.08    (-6.16 to +10.21)       1935        31.50
+gemma3-nocutoff      yelp            yelp_metis_n8_samp0_trainer4_41484994 0.05                  1904         2.88     (-5.88 to +9.76)       1872        13.01
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 66213
+Total Valid Responses: 66213 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 2.96s
+Overall Avg MB Interval: 19.68
+
+GLOBAL Eviction-Label Accuracy = 47.83% (±0.38 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-8.29 to +8.99)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 33822
+  Eviction-Label Accuracy: 47.91%
+
+Buffer size 0.25:
+  Total scorable pairs: 31199
+  Eviction-Label Accuracy: 47.74%
+

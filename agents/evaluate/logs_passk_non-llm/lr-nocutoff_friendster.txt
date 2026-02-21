@@ -1,0 +1,25 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+lr-nocutoff          friendster      friendster_metis_n64_samp0_trainer4_46131756 0.25                  7348         0.00     (-6.89 to +8.19)       7092         1.78
+lr-nocutoff          friendster      friendster_metis_n32_samp0_trainer4_46131755 0.25                  3549         0.00   (-10.84 to +13.88)       3421         1.87
+lr-nocutoff          friendster      friendster_metis_n32_samp0_trainer4_46131747 0.05                  3420         0.00    (-9.21 to +11.79)       3292         1.96
+lr-nocutoff          friendster      friendster_metis_n64_samp0_trainer4_46131748 0.05                  6978         0.00     (-6.09 to +7.24)       6722         1.89
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 21295
+Total Valid Responses: 21295 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 0.00s
+Overall Avg MB Interval: 1.86
+
+GLOBAL Eviction-Label Accuracy = 86.68% (±0.46 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-8.41 to +9.30)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 10014
+  Eviction-Label Accuracy: 87.34%
+
+Buffer size 0.25:
+  Total scorable pairs: 10513
+  Eviction-Label Accuracy: 86.06%
+

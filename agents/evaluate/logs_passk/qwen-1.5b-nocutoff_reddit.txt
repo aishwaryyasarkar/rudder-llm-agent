@@ -1,0 +1,31 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+qwen-1.5b-nocutoff   reddit          reddit_metis_n4_samp0_trainer4_37480941 0.25                   338         5.58   (-18.58 to +38.94)        30.50        23.13
+qwen-1.5b-nocutoff   reddit          reddit_metis_n16_samp0_trainer4_37482051 0.25                   668         6.10   (-22.97 to +32.66)        45.04        18.74
+qwen-1.5b-nocutoff   reddit          reddit_metis_n8_samp0_trainer4_37481522 0.25                   605         5.40   (-19.87 to +32.95)        31.11        15.32
+qwen-1.5b-nocutoff   reddit          reddit_metis_n8_samp0_trainer4_37481213 0.05                   609         5.56   (-14.12 to +23.41)        37.54        15.11
+qwen-1.5b-nocutoff   reddit          reddit_metis_n16_samp0_trainer4_37482042 0.05                   756         6.28   (-15.05 to +21.40)        34.15        16.61
+qwen-1.5b-nocutoff   reddit          reddit_metis_n4_samp0_trainer4_37480229 0.05                   348         5.59    (-9.66 to +20.25)        34.73        22.04
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 3324
+Total Valid Responses: 1663 (50.03%), Total Invalid: 1661 (49.97%)
+Overall Comm Accuracy: 36.31%
+Overall Avg Response Time: 5.86s
+Yes Evict: 66.52%, No Evict: 33.48%
+Total Yes: 1081, Total No: 544
+Overall Avg MB Interval: 17.67
+
+GLOBAL Per-Record CI Across ALL Runs = ±2.62
+GLOBAL Overall HR Accuracy (all runs, all records) = 33.92%
+GLOBAL Per-File CI Across ALL Runs = (-20.21 to +24.34)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 916
+  Weighted Comm Accuracy: 35.29%
+
+Buffer size 0.25:
+  Total records: 747
+  Weighted Comm Accuracy: 37.56%
+

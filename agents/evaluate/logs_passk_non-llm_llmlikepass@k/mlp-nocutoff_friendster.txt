@@ -1,0 +1,29 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+mlp-nocutoff         friendster      friendster_metis_n32_samp0_trainer4_40350917 0.25                  5803         0.74     (-0.37 to +0.47)         0.00         1.13
+mlp-nocutoff         friendster      friendster_metis_n64_samp0_trainer4_40350927 0.25                 10891         0.40     (-0.98 to +1.17)         0.00         1.21
+mlp-nocutoff         friendster      friendster_metis_n64_samp0_trainer4_40350924 0.05                 10238         0.43     (-8.09 to +9.63)         0.00         1.31
+mlp-nocutoff         friendster      friendster_metis_n32_samp0_trainer4_40350914 0.05                  4779         0.80   (-10.20 to +13.06)         0.00         1.42
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 31711
+Total Valid Responses: 31711 (100.00%), Total Invalid: 0 (0.00%)
+Overall Comm Accuracy: 0.00%
+Overall Avg Response Time: 0.53s
+Yes Evict: 22.04%, No Evict: 77.96%
+Total Yes: 6988, Total No: 24723
+Overall Avg MB Interval: 1.27
+
+GLOBAL Per-Record CI Across ALL Runs = ±0.16
+GLOBAL Overall HR Accuracy (all runs, all records) = 97.81%
+GLOBAL Per-File CI Across ALL Runs = (-7.22 to +7.98)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 15017
+  Weighted Comm Accuracy: 0.00%
+
+Buffer size 0.25:
+  Total records: 16694
+  Weighted Comm Accuracy: 0.00%
+

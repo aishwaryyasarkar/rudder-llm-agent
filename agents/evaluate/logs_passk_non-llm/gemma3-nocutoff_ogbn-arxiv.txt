@@ -1,0 +1,47 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_41202250 0.25                   165         2.06    (-5.07 to +15.60)        157        29.11
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46265813 0.25                   175         2.32   (-12.75 to +26.71)        159        43.61
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46265812 0.25                   165         2.13    (-3.89 to +11.97)        157        38.12
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46265814 0.25                   276         2.34   (-19.96 to +33.09)        245        24.34
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264854 0.25                   293         2.39   (-16.28 to +27.00)        262        29.61
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264848 0.25                   168         2.43    (-4.79 to +14.73)        160        55.25
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264851 0.25                   202         2.30    (-9.10 to +19.08)        186        46.43
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264855 0.25                   289         2.26   (-16.31 to +27.04)        257        21.46
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264849 0.25                   120         2.49   (-13.82 to +42.55)        112        48.71
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264852 0.25                   181         2.12   (-12.44 to +26.06)        165        32.79
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264850 0.25                   252         2.57   (-11.73 to +24.58)        236        93.61
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264853 0.25                   444         2.50   (-11.52 to +19.10)        412        38.44
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264847 0.25                   152         3.32    (-4.73 to +14.57)        144       172.69
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_41202249 0.05                   169         2.04    (-4.29 to +13.20)        161        28.36
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46265802 0.05                   193         2.18    (-9.25 to +19.39)        177        34.84
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46265803 0.05                   295         2.08   (-15.43 to +25.59)        263        18.47
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46265801 0.05                   123         3.01    (-5.66 to +17.43)        115        62.82
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264836 0.05                   187         2.41   (-13.38 to +28.03)        171        48.30
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264830 0.05                   138         2.38   (-12.73 to +39.19)        130        56.43
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264839 0.05                   342         2.34   (-12.40 to +20.56)        310        29.41
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264832 0.05                   130         2.53    (-9.06 to +27.90)        122        39.00
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264837 0.05                   183         2.16   (-16.90 to +35.41)        167        22.37
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264840 0.05                   288         2.20   (-18.28 to +30.32)        258        23.51
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n4_samp0_trainer4_46264833 0.05                   266         2.51   (-12.39 to +25.97)        250        69.48
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n2_samp0_trainer4_46264820 0.05                   180         2.81   (-12.55 to +38.62)        172       146.07
+gemma3-nocutoff      ogbn-arxiv      ogbn-arxiv_metis_n8_samp0_trainer4_46264838 0.05                   461         2.55   (-12.45 to +20.64)        429        42.69
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 5837
+Total Valid Responses: 5837 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 2.39s
+Overall Avg MB Interval: 41.11
+
+GLOBAL Eviction-Label Accuracy = 52.48% (±1.33 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-17.07 to +19.41)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 2725
+  Eviction-Label Accuracy: 55.23%
+
+Buffer size 0.25:
+  Total scorable pairs: 2652
+  Eviction-Label Accuracy: 49.66%
+

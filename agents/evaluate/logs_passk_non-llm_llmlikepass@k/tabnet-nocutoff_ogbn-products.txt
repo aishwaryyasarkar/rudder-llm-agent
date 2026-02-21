@@ -1,0 +1,33 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n4_samp0_trainer4_40385500 0.25                  9338         0.08     (-0.80 to +1.67)         0.00         1.25
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n4_samp0_trainer4_41577997 0.25                  7284         0.14     (-1.29 to +2.71)         0.00         1.58
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n8_samp0_trainer4_40386022 0.25                  9718         0.08     (-4.42 to +7.33)         0.00         1.33
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n16_samp0_trainer4_40386081 0.25                 10499         0.10   (-10.84 to +15.41)         0.00         1.25
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n16_samp0_trainer4_40386080 0.05                 10144         0.10   (-11.61 to +16.51)         0.00         1.30
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n8_samp0_trainer4_40386019 0.05                  9376         0.08     (-3.27 to +5.42)         0.00         1.38
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n4_samp0_trainer4_40385499 0.05                  8655         0.09    (-4.93 to +10.32)         0.00         1.35
+tabnet-nocutoff      ogbn-products   ogbn-products_metis_n4_samp0_trainer4_41577990 0.05                  6572         0.16    (-5.02 to +10.52)         0.00         1.74
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 71586
+Total Valid Responses: 71586 (100.00%), Total Invalid: 0 (0.00%)
+Overall Comm Accuracy: 0.00%
+Overall Avg Response Time: 0.10s
+Yes Evict: 13.32%, No Evict: 86.68%
+Total Yes: 9533, Total No: 62053
+Overall Avg MB Interval: 1.35
+
+GLOBAL Per-Record CI Across ALL Runs = ±0.24
+GLOBAL Overall HR Accuracy (all runs, all records) = 88.06%
+GLOBAL Per-File CI Across ALL Runs = (-10.88 to +12.94)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 34747
+  Weighted Comm Accuracy: 0.00%
+
+Buffer size 0.25:
+  Total records: 36839
+  Weighted Comm Accuracy: 0.00%
+

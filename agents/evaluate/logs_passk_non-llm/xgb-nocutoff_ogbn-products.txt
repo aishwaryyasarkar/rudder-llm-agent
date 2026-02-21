@@ -1,0 +1,29 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n4_samp0_trainer4_46200423 0.25                 10995         0.01     (-1.63 to +3.42)      10979         1.02
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n4_samp0_trainer4_45606376 0.25                 10931         0.01     (-1.88 to +3.94)      10915         1.03
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n8_samp0_trainer4_45606844 0.25                 10602         0.00     (-5.55 to +9.21)      10570         1.22
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n16_samp0_trainer4_45606845 0.25                 10444         0.00     (-6.24 to +8.87)      10380         1.27
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n4_samp0_trainer4_45606824 0.05                 10423         0.01     (-2.28 to +4.78)      10407         1.08
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n4_samp0_trainer4_46200417 0.05                 10323         0.01     (-2.49 to +5.22)      10307         1.09
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n16_samp0_trainer4_45606836 0.05                  9838         0.00     (-4.16 to +5.91)       9774         1.33
+xgb-nocutoff         ogbn-products   ogbn-products_metis_n8_samp0_trainer4_45606835 0.05                 10502         0.00     (-3.00 to +4.98)      10470         1.22
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 84058
+Total Valid Responses: 84058 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 0.01s
+Overall Avg MB Interval: 1.22
+
+GLOBAL Eviction-Label Accuracy = 58.53% (±0.33 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-7.78 to +9.26)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 40958
+  Eviction-Label Accuracy: 61.41%
+
+Buffer size 0.25:
+  Total scorable pairs: 42844
+  Eviction-Label Accuracy: 55.77%
+

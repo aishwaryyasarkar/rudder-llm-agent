@@ -1,0 +1,32 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n8_samp0_trainer4_37431995 0.25                  2832         0.55   (-15.07 to +24.98)        41.69         3.98
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n4_samp0_trainer4_37358519 0.25                  1674         0.67   (-14.72 to +30.84)        40.25         5.34
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n16_samp0_trainer4_37478759 0.25                  3609         0.58    (-7.49 to +10.65)        40.60         3.46
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n8_samp0_trainer4_37417244 0.05                  2881         0.55   (-12.90 to +21.40)        39.92         3.78
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n4_samp0_trainer4_37358514 0.05                  1524         0.67   (-17.52 to +36.70)        40.75         5.10
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n16_samp0_trainer4_37417283 0.05                  3622         0.57    (-8.84 to +12.57)        39.53         3.33
+smollm2-1.7B-nocutoff ogbn-products   ogbn-products_metis_n4_samp0_trainer4_37522459 0.05                   592         0.67    (-9.02 to +18.91)        39.52         4.99
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 16734
+Total Valid Responses: 15429 (92.20%), Total Invalid: 1305 (7.80%)
+Overall Comm Accuracy: 40.37%
+Overall Avg Response Time: 0.59s
+Yes Evict: 68.84%, No Evict: 31.16%
+Total Yes: 10610, Total No: 4802
+Overall Avg MB Interval: 3.87
+
+GLOBAL Per-Record CI Across ALL Runs = ±0.85
+GLOBAL Overall HR Accuracy (all runs, all records) = 24.88%
+GLOBAL Per-File CI Across ALL Runs = (-12.99 to +15.54)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 7949
+  Weighted Comm Accuracy: 39.87%
+
+Buffer size 0.25:
+  Total records: 7480
+  Weighted Comm Accuracy: 40.91%
+

@@ -1,0 +1,26 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+lr-nocutoff          orkut           orkut_metis_n4_samp0_trainer4_46036276 0.25                 29886         0.00     (-1.57 to +3.30)      29870         1.02
+lr-nocutoff          orkut           orkut_metis_n8_samp0_trainer4_46036277 0.25                 29954         0.00     (-2.51 to +4.16)      29922         1.07
+lr-nocutoff          orkut           orkut_metis_n16_samp0_trainer4_46036278 0.25                 29198         0.00     (-2.23 to +3.17)      29134         1.10
+lr-nocutoff          orkut           orkut_metis_n4_samp0_trainer4_46036263 0.05                 27680         0.00     (-4.28 to +8.98)      27664         1.10
+lr-nocutoff          orkut           orkut_metis_n8_samp0_trainer4_46036264 0.05                 26330         0.00     (-5.48 to +9.08)      26298         1.23
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 143048
+Total Valid Responses: 143048 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 0.00s
+Overall Avg MB Interval: 1.11
+
+GLOBAL Eviction-Label Accuracy = 56.92% (±0.26 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-5.45 to +6.79)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 53962
+  Eviction-Label Accuracy: 61.62%
+
+Buffer size 0.25:
+  Total scorable pairs: 88926
+  Eviction-Label Accuracy: 54.06%
+

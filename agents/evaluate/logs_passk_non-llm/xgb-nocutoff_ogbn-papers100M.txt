@@ -1,0 +1,31 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI      Pairs     AvgMBInt
+-----------------------------------------------------------------------------------------------------------------------------------------
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n4_samp0_trainer4_46102463 0.25                 60383         0.01     (-0.59 to +1.24)      60367         1.01
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n8_samp0_trainer4_46102464 0.25                 59431         0.01     (-0.89 to +1.47)      59399         1.02
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n16_samp0_trainer4_46102465 0.25                 63522         0.01     (-1.25 to +1.78)      63458         1.01
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n64_samp0_trainer4_46102467 0.25                 72979         0.00     (-4.91 to +5.84)      72723         1.06
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n32_samp0_trainer4_46102466 0.25                 63323         0.00     (-2.21 to +2.82)      63195         1.01
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n4_samp0_trainer4_46102443 0.05                 60221         0.01     (-0.44 to +0.91)      60205         1.01
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n32_samp0_trainer4_46102446 0.05                 62451         0.00     (-4.09 to +5.24)      62323         1.03
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n8_samp0_trainer4_46102444 0.05                 59031         0.01     (-1.81 to +3.01)      58999         1.03
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n64_samp0_trainer4_46102447 0.05                 61035         0.00    (-9.65 to +11.49)      60779         1.29
+xgb-nocutoff         ogbn-papers100M ogbn-papers100M_metis_n16_samp0_trainer4_46102445 0.05                 63410         0.01     (-1.27 to +1.81)      63346         1.01
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 625786
+Total Valid Responses: 625786 (100.00%), Total Invalid: 0 (0.00%)
+Overall Avg Response Time: 0.01s
+Overall Avg MB Interval: 1.10
+
+GLOBAL Eviction-Label Accuracy = 51.93% (±0.12 pp, 95% CI)
+GLOBAL Per-File CI Across ALL Runs (std dev) = (-8.43 to +9.20)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE (pairs-weighted)
+Buffer size 0.05:
+  Total scorable pairs: 305652
+  Eviction-Label Accuracy: 53.30%
+
+Buffer size 0.25:
+  Total scorable pairs: 319142
+  Eviction-Label Accuracy: 50.62%
+

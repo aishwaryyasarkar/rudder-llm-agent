@@ -1,0 +1,31 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+mlp-nocutoff         orkut           orkut_metis_n4_samp0_trainer4_40152295 0.25                 30383         0.03     (-0.02 to +0.03)         0.00         1.00
+mlp-nocutoff         orkut           orkut_metis_n16_samp0_trainer4_40155078 0.25                 31909         0.04     (-0.32 to +0.46)         0.00         1.00
+mlp-nocutoff         orkut           orkut_metis_n8_samp0_trainer4_40152298 0.25                 31963         0.04     (-0.02 to +0.04)         0.00         1.00
+mlp-nocutoff         orkut           orkut_metis_n16_samp0_trainer4_40152322 0.05                 16049         0.05     (-0.56 to +0.79)         0.00         2.00
+mlp-nocutoff         orkut           orkut_metis_n4_samp0_trainer4_40152294 0.05                 15843         0.05     (-2.86 to +5.99)         0.00         1.92
+mlp-nocutoff         orkut           orkut_metis_n8_samp0_trainer4_40152296 0.05                 16098         0.06     (-0.89 to +1.47)         0.00         1.99
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 142245
+Total Valid Responses: 142245 (100.00%), Total Invalid: 0 (0.00%)
+Overall Comm Accuracy: 0.00%
+Overall Avg Response Time: 0.04s
+Yes Evict: 32.74%, No Evict: 67.26%
+Total Yes: 46564, Total No: 95681
+Overall Avg MB Interval: 1.49
+
+GLOBAL Per-Record CI Across ALL Runs = ±0.24
+GLOBAL Overall HR Accuracy (all runs, all records) = 68.27%
+GLOBAL Per-File CI Across ALL Runs = (-43.39 to +52.26)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 47990
+  Weighted Comm Accuracy: 0.00%
+
+Buffer size 0.25:
+  Total records: 94255
+  Weighted Comm Accuracy: 0.00%
+

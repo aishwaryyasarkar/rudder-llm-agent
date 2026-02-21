@@ -1,0 +1,35 @@
+Agent Model          Dataset         Run Dir         Buffer Size      Attempted     AvgRT(s)        File-Level CI   CommAcc(%)     AvgMBInt
+-------------------------------------------------------------------------------------------------------------------------------------------
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n32_samp0_trainer4_37489030 0.25                 20281         1.11   (-16.84 to +21.55)        38.12         2.26
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n4_samp0_trainer4_37506102 0.25                  9640         1.06   (-14.58 to +30.55)        36.74         2.57
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n16_samp0_trainer4_37489047 0.25                 16471         1.10   (-23.14 to +32.91)        36.36         2.40
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n64_samp0_trainer4_37506242 0.25                 28602         1.01   (-15.11 to +17.98)        41.40         2.36
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n8_samp0_trainer4_37536617 0.25                 16336         1.12   (-11.98 to +19.86)        36.71         2.25
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n32_samp0_trainer4_37489024 0.05                 17582         1.04   (-18.49 to +23.67)        38.32         2.35
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n4_samp0_trainer4_37506095 0.05                 11943         0.99   (-12.33 to +25.84)        37.22         2.56
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n8_samp0_trainer4_37536601 0.05                 12309         1.11   (-18.40 to +30.51)        37.10         2.44
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n64_samp0_trainer4_37506236 0.05                 26995         0.98   (-15.21 to +18.10)        43.28         2.29
+smollm2-360M-nocutoff ogbn-papers100M ogbn-papers100M_metis_n16_samp0_trainer4_37489040 0.05                 16530         1.07   (-14.79 to +21.03)        37.12         2.46
+
+OVERALL STATISTICS ACROSS ALL RUNS
+Total records processed (Valid + Invalid): 176689
+Total Valid Responses: 153104 (86.65%), Total Invalid: 23585 (13.35%)
+Overall Comm Accuracy: 38.86%
+Overall Avg Response Time: 1.05s
+Yes Evict: 34.51%, No Evict: 65.49%
+Total Yes: 48950, Total No: 92895
+Overall Avg MB Interval: 2.34
+
+GLOBAL Per-Record CI Across ALL Runs = ±0.21
+GLOBAL Overall HR Accuracy (all runs, all records) = 13.29%
+GLOBAL Per-File CI Across ALL Runs = (-17.99 to +19.65)
+
+ACCURACY STATISTICS GROUPED BY BUFFER SIZE
+Buffer size 0.05:
+  Total records: 74000
+  Weighted Comm Accuracy: 39.33%
+
+Buffer size 0.25:
+  Total records: 79104
+  Weighted Comm Accuracy: 38.43%
+
