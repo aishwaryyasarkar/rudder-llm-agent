@@ -103,11 +103,19 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ### 4) Pull Required Ollama Model(s)
 
+Do this before launching SLURM jobs, so model weights are already present in your Ollama model store.
+
 ```bash
 ollama pull gemma
 ```
 
 You can replace `gemma` with any model string you plan to pass to `--decision_model`.
+
+Model selection guidance:
+- Prefer Ollama-native tags or GGUF-based instruct models when using external model identifiers.
+- In practice, instruct-tuned models are usually better for decision prompts than base models.
+- GGUF variants are generally the most reliable format for Ollama runtime compatibility/performance.
+- If sourcing from Hugging Face, verify the model is available in an Ollama-compatible form (or has a GGUF variant/tag usable by Ollama).
 
 ### 5) Optional Ollama Environment Variables
 

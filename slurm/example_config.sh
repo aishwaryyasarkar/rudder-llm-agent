@@ -13,7 +13,7 @@ ALPHAS="0.05"                      # alpha value(s), space-separated allowed
 DATASET_NAME="ogbn-products"       # dataset name(s), space-separated allowed
 NUM_NODES="4"                      # node counts, space-separated allowed (e.g., "2 4 8")
 NUM_TRAINERS="4"                   # trainers per node
-NUM_SAMPLER_PROCESSES="1"          # sampler processes per trainer
+NUM_SAMPLER_PROCESSES="0"          # sampler processes per trainer; use 0
 QUEUE="debug"                    # SLURM queue
 
 # Paths
