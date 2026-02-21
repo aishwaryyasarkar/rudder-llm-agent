@@ -1,7 +1,7 @@
 import os
 import joblib
 import torch
-from agents.ml_agents.mlp.mlp import MLPClassifier
+from classifier_models.mlp.mlp import MLPClassifier
 import pandas as pd
 from collections import OrderedDict
 from pytorch_tabnet.tab_model import TabNetClassifier
