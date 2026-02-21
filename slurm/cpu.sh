@@ -24,12 +24,10 @@ MODEL=${13}
 DATA_DIR=${14}
 PROJ_PATH=${15}
 PARTITION_DIR=${16}
-CUTOFF=${17}
-PREFETCHER_INIT=${18}
-REUSE_TRACKER=${19}
-DECISION_MODEL=${20}
-ENABLE_FINETUNE=${21} # whether to enable finetuning of the decision model
-ML_MODEL_DIR=${22} # optional override for non-LLM model directory
+PREFETCHER_INIT=${17}
+DECISION_MODEL=${18}
+ENABLE_FINETUNE=${19} # whether to enable finetuning of the decision model
+ML_MODEL_DIR=${20} # optional override for non-LLM model directory
 JOBID=$SLURM_JOB_ID
 
 if [ -z "$ML_MODEL_DIR" ]; then
@@ -125,7 +123,7 @@ if [ "$MODEL" == "sage" ]; then
     --part_config $PARTITION_DIR \
     --ip_config  $IP_CONFIG_FILE \
     --num_omp_threads $OMP_THREADS \
-    "$PYTHON_PATH massivegnn/main.py --graph_name $DATASET_NAME \
+    "$PYTHON_PATH dist_gnn/main.py --graph_name $DATASET_NAME \
     --backend $BACKEND \
     --ip_config $IP_CONFIG_FILE --num_epochs 100 --batch_size 2000 \
     --summary_filepath $SUMMARYFILE \
@@ -137,7 +135,6 @@ if [ "$MODEL" == "sage" ]; then
     --num_numba_threads $NUMBA_THREADS \
     --hit_rate_flag $HIT_RATE \
     --model $MODEL \
-    --eviction_cutoff $CUTOFF \
     --prefetcher_init $PREFETCHER_INIT \
     --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \
@@ -152,7 +149,7 @@ if [ "$MODEL" == "gat" ]; then
     --part_config $PARTITION_DIR \
     --ip_config  $IP_CONFIG_FILE \
     --num_omp_threads $OMP_THREADS \
-    "$PYTHON_PATH massivegnn/main.py --graph_name $DATASET_NAME \
+    "$PYTHON_PATH dist_gnn/main.py --graph_name $DATASET_NAME \
     --backend $BACKEND \
     --ip_config $IP_CONFIG_FILE --num_epochs 100 --batch_size 2000 \
     --summary_filepath $SUMMARYFILE \

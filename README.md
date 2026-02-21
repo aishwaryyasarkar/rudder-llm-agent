@@ -204,7 +204,6 @@ if [ "$MODEL" == "sage" ]; then
       --num_numba_threads $NUMBA_THREADS \
       --hit_rate_flag $HIT_RATE \
       --model $MODEL \
-      --eviction_cutoff $CUTOFF \
       --prefetcher_init $PREFETCHER_INIT \
       --decision_model $DECISION_MODEL \
       --ml_model_dir $ML_MODEL_DIR \
@@ -249,7 +248,6 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - `--num_numba_threads`: Numba thread count used by prefetch/score update paths.
 - `--hit_rate_flag`: toggles hit-rate-based decision input behavior.
 - `--model`: GNN model (`sage` or `gat`).
-- `--eviction_cutoff`: optional cutoff for eviction candidate selection.
 - `--prefetcher_init`: prefetch buffer initialization mode (`degree`, `empty`, `random`).
 - `--decision_model`: eviction decision model.
   - Classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`

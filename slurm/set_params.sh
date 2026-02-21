@@ -66,16 +66,13 @@ DATA_DIR=${DATA_DIR:-${13}}
 PROJ_PATH=${PROJ_PATH:-${14}}
 PARTITION_DIR=${PARTITION_DIR:-${15}}
 PARTITION_METHOD=${PARTITION_METHOD:-${16}}
-CUTOFF=${CUTOFF:-${17}}
-PREFETCHER_INIT=${PREFETCHER_INIT:-${18}}
-INTERACTIVE=${INTERACTIVE:-${19}}
-REUSE_TRACKER=${REUSE_TRACKER:-${20}}
-DECISION_MODEL=${DECISION_MODEL:-${21}}
-ENABLE_FINETUNE=${ENABLE_FINETUNE:-${22}} # whether to enable finetuning of the decision model
-FINETUNE_INTERVAL=${FINETUNE_INTERVAL:-${23}} # finetune interval, if finetuning is enabled
-BATCH_SIZE=${BATCH_SIZE:-${24}} # batch size for training
-BATCHSIZE_EXP=${BATCHSIZE_EXP:-${25}} # whether to run experiments with different batch sizes
-ML_MODEL_DIR=${ML_MODEL_DIR:-${26}} # optional override for non-LLM model directory
+PREFETCHER_INIT=${PREFETCHER_INIT:-${17}}
+DECISION_MODEL=${DECISION_MODEL:-${18}}
+ENABLE_FINETUNE=${ENABLE_FINETUNE:-${19}} # whether to enable finetuning of the decision model
+FINETUNE_INTERVAL=${FINETUNE_INTERVAL:-${20}} # finetune interval, if finetuning is enabled
+BATCH_SIZE=${BATCH_SIZE:-${21}} # batch size for training
+BATCHSIZE_EXP=${BATCHSIZE_EXP:-${22}} # whether to run experiments with different batch sizes
+ML_MODEL_DIR=${ML_MODEL_DIR:-${23}} # optional override for non-LLM model directory
 
 # Validate that all required arguments are provided
 if [ -z "$MODE" ] || [ -z "$HIT_RATE" ] || [ -z "$MODEL" ] || [ -z "$FP" ] || [ -z "$DELTA" ] || [ -z "$ALPHAS" ] || [ -z "$DATASET_NAME" ] || [ -z "$NUM_NODES" ] || [ -z "$NUM_TRAINERS" ] || [ -z "$NUM_SAMPLER_PROCESSES" ] || [ -z "$QUEUE" ] || [ -z "$LOGS_DIR" ] || [ -z "$DATA_DIR" ] || [ -z "$PROJ_PATH" ] || [ -z "$PARTITION_DIR" ] || [ -z "$PARTITION_METHOD" ]; then
@@ -87,8 +84,6 @@ fi
 echo "FP: $FP"
 echo "DELTA: $DELTA"
 echo "ALPHAS: $ALPHAS"
-echo "Interactive mode: $INTERACTIVE"
-echo "Reuse tracker: $REUSE_TRACKER"
 echo "Decision model: $DECISION_MODEL"
 echo "Enable finetuning: $ENABLE_FINETUNE"
 
@@ -121,7 +116,7 @@ for n in $NUM_NODES; do
                         echo "Submitting job for $NUM_NODES nodes with prefetch fraction $fp, delta $delta, alpha $alpha, finetune interval $finetune_interval"
 
                         CMD="bash submit.sh "$MODE" "$BACKEND" "$fp" "$delta" "$alpha" "$HIT_RATE" "$DATASET_NAME" "$n" "$NUM_TRAINERS" "$NUM_SAMPLER_PROCESSES" "$MODEL" "$QUEUE" "$LOGS_DIR" "$DATA_DIR" "$PROJ_PATH" "$NEW_PARTITION_DIR" \
-                            "$PARTITION_METHOD" "$CUTOFF" "$PREFETCHER_INIT" "$INTERACTIVE" "$REUSE_TRACKER" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR""
+                            "$PARTITION_METHOD" "$PREFETCHER_INIT" "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" "$ML_MODEL_DIR""
                         eval $CMD
                         done
                 done

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example config for:
-#   bash slurm/massivegnn/set_params.sh --config slurm/massivegnn/example_config.sh
+#   bash slurm/set_params.sh --config slurm/example_config.sh
 
 # Required core params
 MODE="gpu"                         # cpu | gpu
@@ -24,10 +24,7 @@ PARTITION_DIR="/path/to/partitions"
 PARTITION_METHOD="metis"
 
 # Optional knobs
-CUTOFF="0"
 PREFETCHER_INIT="empty"           # degree | empty | random 
-INTERACTIVE="false"                # true | false
-REUSE_TRACKER="false"              # currently ignored by runtime scripts
 DECISION_MODEL="gemma"                # llm model name or mlp/tabnet/lr/rf/xgb/svm
 ENABLE_FINETUNE="false"
 FINETUNE_INTERVAL="50"

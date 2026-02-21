@@ -16,18 +16,13 @@ DATA_DIR=${14}
 PROJ_PATH=${15}
 PARTITION_DIR=${16}
 PARTITION_METHOD=${17}
-CUTOFF=${18}
-PREFETCHER_INIT=${19}
-INTERACTIVE=${20}
-REUSE_TRACKER=${21}
-DECISION_MODEL=${22}
-BATCH_SIZE=${23} # batch size for training
-BATCHSIZE_EXP=${24} # whether to run experiments with different batch sizes
-ENABLE_FINETUNE=${25} # whether to enable finetuning of the decision model
-FINETUNE_INTERVAL=${26} # finetune interval, if finetuning is enabled
-ML_MODEL_DIR=${27} # optional override for non-LLM model directory
-
-echo "Interactive mode: $INTERACTIVE"
+PREFETCHER_INIT=${18}
+DECISION_MODEL=${19}
+BATCH_SIZE=${20} # batch size for training
+BATCHSIZE_EXP=${21} # whether to run experiments with different batch sizes
+ENABLE_FINETUNE=${22} # whether to enable finetuning of the decision model
+FINETUNE_INTERVAL=${23} # finetune interval, if finetuning is enabled
+ML_MODEL_DIR=${24} # optional override for non-LLM model directory
 # echo "Decision model: $DECISION_MODEL"
 if [ "$MODE" == "cpu" ]; then
     BACKEND=$2
@@ -82,16 +77,10 @@ for DATASET in $DATASET_NAME; do
         for NODES in $NUM_NODES; do
             for SAMPLER_PROCESSES in $NUM_SAMPLER_PROCESSES; do
                 for TRAINERS in $NUM_TRAINERS; do
-                    # if interactive mode is true, replace %j with slurmid
                     NAME="${DATASET}_${PARTITION}_n${NODES}_samp${SAMPLER_PROCESSES}_trainer${TRAINERS}"
                     JOBNAME="as-${DECISION_MODEL}_${MODE}_PF${PREFETCH_FRACTION}_P${EVICTION_PERIOD}_a${ALPHA}_${HIT_RATE}_${MODEL}_${NAME}_finetune_${ENABLE_FINETUNE}_interval_${FINETUNE_INTERVAL}_batchsize_${BATCH_SIZE}"
-                    if [ "$INTERACTIVE" == "true" ]; then
-                        OUTFILE="${LOGS_DIR}/${NAME}_${SLURM_JOB_ID}.out"
-                        ERRFILE="${LOGS_DIR}/${NAME}_${SLURM_JOB_ID}.err"
-                    else
-                        OUTFILE="${LOGS_DIR}/${NAME}_%j.out"
-                        ERRFILE="${LOGS_DIR}/${NAME}_%j.err"
-                    fi
+                    OUTFILE="${LOGS_DIR}/${NAME}_%j.out"
+                    ERRFILE="${LOGS_DIR}/${NAME}_%j.err"
                     SUMMARYFILE="${LOGS_DIR}/${NAME}"
                     IP_CONFIG_FILE="${IP_CONFIG_DIR}/ip_config_${NAME}"
 
@@ -141,46 +130,25 @@ for DATASET in $DATASET_NAME; do
                             esac
                         fi
                     fi
-                    if [ "$INTERACTIVE" == "false" ]; then
-                        echo "-----------------------------------------------------"
-                        echo "Submitting job $JOBNAME with the following parameters:"
-                        echo "Dataset: $DATASET"
-                        echo "Number of Nodes: $NODES"
-                        echo "Summary file: $SUMMARYFILE"
-                        echo "Eviction Period: $EVICTION_PERIOD"
-                        echo "Prefetch Fraction: $PREFETCH_FRACTION"
-                        echo "Alpha: $ALPHA"
-                        echo "Time: $TIME"
-                        if [ "$MODE" == "gpu" ]; then
-                            CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
-                            $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
-                        elif [ "$MODE" == "cpu" ]; then
-                            CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
-                            $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR \
-                            $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
-                        fi 
-                    else
-                        echo "-----------------------------------------------------"
-                        echo "Running INTERACTIVE mode with the following parameters:"
-                        echo "Dataset: $DATASET"
-                        echo "Number of Nodes: $NODES"
-                        echo "Summary file: $SUMMARYFILE"
-                        echo "Eviction Period: $EVICTION_PERIOD"
-                        echo "Prefetch Fraction: $PREFETCH_FRACTION"
-                        echo "Alpha: $ALPHA"
-                        echo "Decision Model: $DECISION_MODEL"
-                        if [ "$MODE" == "gpu" ]; then
-                            CMD="bash interactive-gpu.sh  $DATASET $PARTITION \
-                            $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
-                            $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
-                        elif [ "$MODE" == "cpu" ]; then
-                            CMD="bash interactive-cpu.sh $DATASET $PARTITION \
-                            $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA $HIT_RATE \
-                            $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $CUTOFF $PREFETCHER_INIT $REUSE_TRACKER $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR > $OUTFILE 2> $ERRFILE"
-                        fi
-                    fi             
+                    echo "-----------------------------------------------------"
+                    echo "Submitting job $JOBNAME with the following parameters:"
+                    echo "Dataset: $DATASET"
+                    echo "Number of Nodes: $NODES"
+                    echo "Summary file: $SUMMARYFILE"
+                    echo "Eviction Period: $EVICTION_PERIOD"
+                    echo "Prefetch Fraction: $PREFETCH_FRACTION"
+                    echo "Alpha: $ALPHA"
+                    echo "Time: $TIME"
+                    if [ "$MODE" == "gpu" ]; then
+                        CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
+                        $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $TRAINERS $BACKEND $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
+                        $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
+                    elif [ "$MODE" == "cpu" ]; then
+                        CMD="sbatch -N $NODES -q $QUEUE --job-name $JOBNAME -o $OUTFILE -e $ERRFILE --time=$TIME $SCRIPT $DATASET $PARTITION \
+                        $NODES $SAMPLER_PROCESSES $SUMMARYFILE $IP_CONFIG_FILE $BACKEND $TRAINERS $EVICTION_PERIOD $PREFETCH_FRACTION $ALPHA \
+                        $HIT_RATE $MODEL $DATA_DIR $PROJ_PATH $PARTITION_DIR \
+                        $PREFETCHER_INIT $DECISION_MODEL $ENABLE_FINETUNE $BATCH_SIZE $FINETUNE_INTERVAL $ML_MODEL_DIR"
+                    fi
                     # Submit the job
                     eval $CMD
                 done

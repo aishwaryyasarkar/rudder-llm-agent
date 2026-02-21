@@ -79,7 +79,6 @@ class PrefetchBuffer:
         self.period = self.args.eviction_period
         self.threshold = round(self.calculate_threshold(), 3)
         self.evict = False
-        self.eviction_cutoff = self.args.eviction_cutoff
         self.num_evicted_nodes = 0
         self.evicted_candidates = set()
         self.donotevict_counter = 0  # Counter for "do not evict" decisions

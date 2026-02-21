@@ -24,13 +24,12 @@ MODEL=${13}
 DATA_DIR=${14}
 PROJ_PATH=${15}
 PARTITION_DIR=${16}
-CUTOFF=${17}
-PREFETCHER_INIT=${18}
-DECISION_MODEL=${19}
-ENABLE_FINETUNE=${20} # whether to enable finetuning of the decision model
-BATCH_SIZE=${21} # batch size for training
-FINETUNE_INTERVAL=${22} # finetune interval, if finetuning is enabled
-ML_MODEL_DIR=${23} # optional override for non-LLM model directory
+PREFETCHER_INIT=${17}
+DECISION_MODEL=${18}
+ENABLE_FINETUNE=${19} # whether to enable finetuning of the decision model
+BATCH_SIZE=${20} # batch size for training
+FINETUNE_INTERVAL=${21} # finetune interval, if finetuning is enabled
+ML_MODEL_DIR=${22} # optional override for non-LLM model directory
 TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
 JOBID=$SLURM_JOB_ID
 
@@ -142,7 +141,6 @@ if [ "$MODEL" == "sage" ]; then
     --num_numba_threads $NUMBA_THREADS \
     --hit_rate_flag $HIT_RATE \
     --model $MODEL \
-    --eviction_cutoff $CUTOFF \
     --prefetcher_init $PREFETCHER_INIT \
     --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \

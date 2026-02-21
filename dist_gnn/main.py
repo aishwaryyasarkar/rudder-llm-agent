@@ -318,9 +318,6 @@ if __name__ == "__main__":
         "--eviction_period", type=int, default=25, help="eviction period"
     )
     parser.add_argument(
-        "--eviction_cutoff", type=int, help="eviction cutoff"
-    )
-    parser.add_argument(
         "--alpha", type=float, default=0.05, help="alpha"
     )
     parser.add_argument(
