@@ -1,8 +1,6 @@
 #!/bin/bash
-#SBATCH -A m4626
+#SBATCH -A <account>
 #SBATCH --constraint=gpu
-#SBATCH --mail-type=begin,end,fail
-#SBATCH --mail-user=asarkar1@iastate.edu
 
 source activate llm-dgl-cu121
 PYTHON_PATH=$(which python)

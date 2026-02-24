@@ -205,7 +205,7 @@ sbatch partition.sh <dataset_name> <partition_method> "<num_parts_list>" <DATA_D
 
 ### Step 3: Submit jobs
 
-[`slurm/set_params.sh`](slurm/set_params.sh) calls [`slurm/submit.sh`](slurm/submit.sh) to launch either [`slurm/cpu.sh`](slurm/cpu.sh) or [`slurm/gpu.sh`](slurm/gpu.sh) based on `MODE`:
+[`slurm/set_params.sh`](slurm/set_params.sh) calls [`slurm/submit.sh`](slurm/submit.sh) to launch either [`slurm/cpu.sh`](slurm/cpu.sh) or [`slurm/gpu.sh`](slurm/gpu.sh) based on `MODE` selected. Set your project account by replacing `<account>` in `#SBATCH -A` in both scripts. To change job wall time, update in [`slurm/submit.sh`](slurm/submit.sh).
 
 ```bash
 cd slurm
