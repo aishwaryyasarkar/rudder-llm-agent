@@ -473,7 +473,7 @@ class PrefetchBuffer:
                         self.eviction_decision_responses.queue.clear()
 
                     # Record a pending eviction event for a no-evict decision.
-                    if not self.use_classifier:
+                    if not self.collection_mode and not self.use_classifier:
                         self.context_agent.store_pending_eviction(
                             pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                             num_evicted_nodes=0,  # No nodes evicted.
@@ -494,7 +494,7 @@ class PrefetchBuffer:
                         self.eviction_decision_responses.queue.clear()
 
                     # Record a pending eviction event for a no-evict decision.
-                    if not self.use_classifier:
+                    if not self.collection_mode and not self.use_classifier:
                         self.context_agent.store_pending_eviction(
                             pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                             num_evicted_nodes=0,  # No nodes evicted.
@@ -532,7 +532,7 @@ class PrefetchBuffer:
                 # print(f"Rank {self.rank}: Minibatch {self.counter} | Evicted candidates")
                 # self.evict = False
                 # Store a pending eviction record with a reason.
-                if not self.use_classifier:
+                if not self.collection_mode and not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=self.num_evicted_nodes,
@@ -547,7 +547,7 @@ class PrefetchBuffer:
                 total_rpc += time.time() - no_evict_rpc_start
 
                 # No eviction candidates found: store a pending eviction record (skipped) with a reason.
-                if not self.use_classifier:
+                if not self.collection_mode and not self.use_classifier:
                     self.context_agent.store_pending_eviction(
                         pre_eviction_summary=self.shared_state_store.aggregated_metrics,
                         num_evicted_nodes=0,
@@ -556,7 +556,8 @@ class PrefetchBuffer:
                         reason="No eviction candidates found."
                     )
             #  Unpause the worker thread to allow it to process the next stat
-            self.set_pause_worker(False)  # Unpause the worker thread
+            if not self.collection_mode:
+                self.set_pause_worker(False)  # Unpause the worker thread
         else:
             future = self.executor.submit(self.update_score, input_nodes_array[missed_minibatch_idx])
             start_normal_rpc = time.time()
