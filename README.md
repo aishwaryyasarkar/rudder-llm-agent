@@ -57,6 +57,7 @@ rudder-gnn/
 │   ├── submit.sh              # Job submission orchestrator
 │   ├── cpu.sh                 # CPU job script
 │   ├── gpu.sh                 # GPU job script
+├── env.yml  
 └── README.md
 ```
 
@@ -72,28 +73,20 @@ Requirements:
 - Numba
 - Ollama (for LLM agents)
 
-System/runtime expectations:
-- Multi-process training environment for DistDGL.
-- Valid `ip_config` and graph partition config (`part_config`).
-- Graph partitions with required node fields: `features`, `labels`, `train_mask`, `val_mask`, `test_mask` (and optionally `trainer_id`).
-
-### Step 1: Create Python Environment
+### Step 1: Create Conda Environment using provided `env.yml`
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
+git clone https://github.com/aishwaryyasarkar/rudder-gnn.git
+cd rudder-gnn
+conda env create -f env.yml
+conda activate llm-dgl-cu121
 ```
 
-### Step 2: Install Python Dependencies
+#### Note: If your CUDA version differs from 12.1, install DGL and PyTorch separately
+  - Follow the instructions on the [DGL official installation page](https://www.dgl.ai/pages/start.html).
+  - Visit the [PyTorch official site](https://pytorch.org/get-started/locally/) and select the appropriate configuration based on your CUDA version.
 
-Install framework versions compatible with your CUDA/cluster setup first (PyTorch + DGL), then install the rest:
-
-```bash
-pip install numpy pandas scikit-learn numba xgboost pytorch-tabnet joblib tqdm
-```
-
-### Step 3: Install Ollama (LLM Agents Only)
+### Step 2: Install Ollama (LLM Agents Only)
 
 macOS:
 
@@ -107,7 +100,7 @@ Linux:
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### Step 4: Pull Required Ollama Model(s)
+### Step 3: Pull Required Ollama Model(s)
 
 Do this before launching SLURM jobs, so model weights are already present in your Ollama model store.
 
@@ -123,7 +116,7 @@ Model selection guidance:
 - GGUF variants are generally the most reliable format for Ollama runtime compatibility/performance.
 - If sourcing from Hugging Face, verify the model is available in an Ollama-compatible form (or has a GGUF variant/tag usable by Ollama).
 
-### Step 5: Optional Ollama Environment Variables
+### Step 4: Optional Ollama Environment Variables
 
 ```bash
 export OLLAMA_BIN="$(which ollama)"
