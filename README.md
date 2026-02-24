@@ -75,7 +75,7 @@ Minimum expected stack:
 System/runtime expectations:
 - Multi-process training environment for DistDGL.
 - Valid `ip_config` and graph partition config (`part_config`).
-- Graph store with required node fields: `features`, `labels`, `train_mask`, `val_mask`, `test_mask` (and optionally `trainer_id`).
+- Graph partitions with required node fields: `features`, `labels`, `train_mask`, `val_mask`, `test_mask` (and optionally `trainer_id`).
 
 ### 1) Create Python Environment
 
@@ -141,29 +141,30 @@ The SLURM workflow in this repo is:
 3. `submit.sh` (dispatches to `cpu.sh` or `gpu.sh`)
 4. `cpu.sh` / `gpu.sh` (launch distributed training via `launch.py`)
 
-### Step 1: Edit Config
+### Step 1: Partition the input graph
 
-Update:
-- `slurm/example_config.sh`
+Before submitting Rudder jobs, generate DistDGL partitions for your dataset using the MassiveGNN partitioning intructions : [MassiveGNN: Partition Graph](https://github.com/pnnl/MassiveGNN?tab=readme-ov-file#partition-graph)
 
-Key fields:
+Use the partition artifacts from that step as your `PARTITION_DIR` / `--part_config` inputs in this repository.
+
+### Step 2: Edit config file  [`slurm/example_config.sh`](slurm/example_config.sh) 
+
+#### Key fields:
 - `MODE`, `MODEL`, `DECISION_MODEL`
 - `DATASET_NAME`, `NUM_NODES`, `NUM_TRAINERS`
 - `PROJ_PATH`, `PARTITION_DIR`, `LOGS_DIR`, `DATA_DIR`
 - Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"`)
 
-### Step 2: Launch from `slurm/` Directory
+### Step 3: Submit jobs
 
-`set_params.sh` calls `submit.sh` by relative path, so run from inside `slurm/`:
+[`slurm/set_params.sh`](slurm/set_params.sh) calls [`slurm/submit.sh`](slurm/submit.sh) to launch either [`slurm/cpu.sh`](slurm/cpu.sh) or [`slurm/gpu.sh`](slurm/gpu.sh) based on `MODE`:
 
 ```bash
 cd slurm
 bash set_params.sh --config example_config.sh
 ```
 
-### Optional: Positional Args Instead of Config
-
-You can still use positional mode:
+### Optional: CLI Args Instead of Config
 
 ```bash
 bash set_params.sh --help
@@ -171,78 +172,17 @@ bash set_params.sh --help
 
 ### SLURM Notes
 
-- `submit.sh` chooses backend automatically from mode:
+- [`submit.sh`](slurm/submit.sh) chooses backend automatically from mode:
   - `cpu` -> `gloo`
   - `gpu` -> `nccl`
-- `cpu.sh` / `gpu.sh` build an `ip_config` file from allocated nodes.
-- Job time and log paths are derived in `submit.sh` from dataset/model/node settings.
+- [`slurm/cpu.sh`](slurm/cpu.sh) / [`slurm/gpu.sh`](slurm/gpu.sh) build an `ip_config` file from allocated nodes.
+- Job time and log paths are set in [`slurm/submit.sh`](slurm/submit.sh) from dataset/model/node settings.
 
-## Running Distributed Training
+## Running Pytorch Distributed Training
 
-Entry point:
-- `dist_gnn/main.py`
+Entry point: [`dist_gnn/main.py`](dist_gnn/main.py)
 
-Required runtime arguments:
-- `--graph_name`
-- `--ip_config`
-- `--part_config`
-- `--summary_filepath`
-- `--local-rank` (usually supplied by launcher)
-
-Use your cluster launcher / distributed orchestration workflow to spawn all ranks.
-
-Why `launch.py` is required:
-- DistDGL training is not a single-process run. It needs coordinated server, trainer, and sampler processes across nodes.
-- `launch.py` sets the required distributed environment (role/process layout, partition/ip configs, torch distributed launcher args, and OMP settings) and launches all processes consistently.
-- Calling `dist_gnn/main.py` directly bypasses that orchestration and will not correctly initialize a multi-node DistDGL job.
-
-### Example: LLM Agent
-
-```bash
-if [ "$MODEL" == "sage" ]; then
-  echo "Running SAGE model..."
-  $PYTHON_PATH $PROJ_PATH/launch.py \
-    --workspace $PROJ_PATH \
-    --num_trainers $GPUS_PER_NODE \
-    --num_samplers $SAMPLER_PROCESSES \
-    --num_servers 1 \
-    --part_config $PARTITION_DIR \
-    --ip_config $IP_CONFIG_FILE \
-    --num_omp_threads $OMP_THREADS \
-    "$PYTHON_PATH dist_gnn/main.py --graph_name $DATASET_NAME \
-      --backend $BACKEND \
-      --ip_config $IP_CONFIG_FILE --num_epochs $EPOCHS --batch_size $BATCH_SIZE \
-      --num_gpus $GPUS_PER_NODE --summary_filepath $SUMMARYFILE \
-      --prefetch_fraction $PREFETCH_FRACTION --eviction_period $EVICTION_PERIOD --alpha $ALPHA \
-      --eviction $EVICTION \
-      --num_numba_threads $NUMBA_THREADS \
-      --hit_rate_flag $HIT_RATE \
-      --model $MODEL \
-      --prefetcher_init $PREFETCHER_INIT \
-      --decision_model $DECISION_MODEL \
-      --ml_model_dir $ML_MODEL_DIR \
-      --enable_finetune $ENABLE_FINETUNE \
-      --finetune_interval $FINETUNE_INTERVAL"
-fi
-```
-
-### Example: Classifier Decision Model
-
-```bash
-python dist_gnn/main.py \
-  --graph_name ogbn-products \
-  --ip_config /path/to/ip_config.txt \
-  --part_config /path/to/graph_partition.json \
-  --summary_filepath /path/to/results/summary.txt \
-  --local-rank 0 \
-  --decision_model lr \
-  --ml_model_dir /path/to/trained_classifier_models \
-  --model sage
-```
-
-## Important CLI Options (`dist_gnn/main.py`)
-
-### Common CLI args
+### CLI Options (`dist_gnn/main.py`)
 
 Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/scripts rather than set manually.
 
@@ -266,7 +206,7 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - `--decision_model`: eviction decision model.
   - Classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`
   - Agent models (LLM): any Ollama model name string
-- `--ml_model_dir`: directory of non-LLM model artifacts.
+- `--ml_model_dir`: path to directory that contained trained ML Classifiers.
 - `--enable_finetune`: enable/disable online finetuning for supported agents.
 - `--finetune_interval`: interval used when finetuning is enabled.
 - `--fan_out`: neighbor sampling fanout per layer.
@@ -279,22 +219,50 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - `--ollama_bin`: optional Ollama executable override.
 - `--ollama_models_dir`: optional Ollama model-store path override.
 
+Note: Why [`launch.py`](launch.py) is required:
+- DistDGL training is not a single-process run. It needs coordinated server, trainer, and sampler processes across nodes.
+- [`launch.py`](launch.py) sets the required distributed environment (role/process layout, partition/ip configs, torch distributed launcher args, and OMP settings) and launches all processes consistently.
+- Calling [`dist_gnn/main.py`](dist_gnn/main.py) directly bypasses that orchestration and will not correctly initialize a multi-node DistDGL job.
+
 ## Ollama Behavior
 
-`agents/start_ollama.py` starts a rank-local Ollama server with:
+[`agents/start_ollama.py`](`agents/start_ollama.py`) starts a rank-local Ollama server with:
 - `OLLAMA_HOST=127.0.0.1:<11434 + local_rank>`
 - Optional model directory from `--ollama_models_dir` or env `OLLAMA_MODELS`
 - Optional binary from `--ollama_bin` or env `OLLAMA_BIN` (default: `ollama`)
-
-Current runtime note:
 - In `dist_gnn/main.py`, Ollama startup is skipped for classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`.
 
-## Training Non-LLM Classifier Models
+### Example run cmd using LLM Agents
 
-Each script in `classifier_models/*/*.py` supports:
-- `--train_csv`
-- `--test_csv`
-- `--model_dir`
+```bash
+if [ "$MODEL" == "sage" ]; then
+  echo "Running SAGE model..."
+  $PYTHON_PATH $PROJ_PATH/launch.py \
+    --workspace $PROJ_PATH \
+    --num_trainers $GPUS_PER_NODE \
+    --num_samplers $SAMPLER_PROCESSES \
+    --num_servers 1 \
+    --part_config $PARTITION_DIR \
+    --ip_config $IP_CONFIG_FILE \
+    --num_omp_threads $OMP_THREADS \
+    "$PYTHON_PATH dist_gnn/main.py --graph_name $DATASET_NAME \
+      --backend $BACKEND \
+      --ip_config $IP_CONFIG_FILE --num_epochs $EPOCHS --batch_size $BATCH_SIZE \
+      --num_gpus $GPUS_PER_NODE --summary_filepath $SUMMARYFILE \
+      --prefetch_fraction $PREFETCH_FRACTION --eviction_period $EVICTION_PERIOD --alpha $ALPHA \
+      --eviction $EVICTION \
+      --num_numba_threads $NUMBA_THREADS \
+      --hit_rate_flag $HIT_RATE \
+      --model $MODEL \
+      --prefetcher_init $PREFETCHER_INIT \
+      --decision_model $DECISION_MODEL \
+      --enable_finetune $ENABLE_FINETUNE \
+      --finetune_interval $FINETUNE_INTERVAL"
+fi
+```
+
+## Training Non-LLM Classifier Models
+Each script in `classifier_models` supports: `--train_csv`, `--test_csv`, and  `--model_dir`. You will need to collect training data.
 
 ### Example: Logistic Regression
 
