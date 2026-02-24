@@ -32,8 +32,21 @@ FINETUNE_INTERVAL=${21} # finetune interval, if finetuning is enabled
 ML_MODEL_DIR=${22} # optional override for non-LLM model directory
 OLLAMA_BIN=${23} # optional override for ollama executable
 OLLAMA_MODELS_DIR=${24} # optional override for ollama models directory
+COLLECT_TRAINING_FOR_CLASSIFIER=${25} # whether to collect classifier-training data
+TRAINING_DATA_FILEPATH=${26} # optional output CSV path for collected training data
 TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
 JOBID=$SLURM_JOB_ID
+
+OPTIONAL_MAIN_ARGS=""
+if [ -n "$OLLAMA_BIN" ]; then
+    OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --ollama_bin $OLLAMA_BIN"
+fi
+if [ -n "$OLLAMA_MODELS_DIR" ]; then
+    OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --ollama_models_dir $OLLAMA_MODELS_DIR"
+fi
+if [ -n "$TRAINING_DATA_FILEPATH" ]; then
+    OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --training_data_filepath $TRAINING_DATA_FILEPATH"
+fi
 
 if [ -z "$ML_MODEL_DIR" ]; then
     ML_MODEL_DIR="$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"
@@ -146,8 +159,8 @@ if [ "$MODEL" == "sage" ]; then
     --prefetcher_init $PREFETCHER_INIT \
     --decision_model $DECISION_MODEL \
     --ml_model_dir $ML_MODEL_DIR \
-    --ollama_bin $OLLAMA_BIN \
-    --ollama_models_dir $OLLAMA_MODELS_DIR \
+    --collect_training_for_classifier $COLLECT_TRAINING_FOR_CLASSIFIER \
+    $OPTIONAL_MAIN_ARGS \
     --enable_finetune $ENABLE_FINETUNE \
     --finetune_interval $FINETUNE_INTERVAL"
 fi
@@ -171,5 +184,7 @@ if [ "$MODEL" == "gat" ]; then
     --num_numba_threads $NUMBA_THREADS \
     --hit_rate_flag $HIT_RATE \
     --model $MODEL \
+    --collect_training_for_classifier $COLLECT_TRAINING_FOR_CLASSIFIER \
+    $OPTIONAL_MAIN_ARGS \
     --num_heads 2"
 fi

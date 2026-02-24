@@ -27,10 +27,16 @@ class PrefetchBuffer:
         self._setup_buffer_state()
         self._setup_eviction_policy_params()
         self._setup_metrics_state()
-        self._setup_eviction_backend(metadata, ollama_port, local_rank)
-        self._setup_worker()
-        self._setup_decision_logging(logdir)
-        self._start_workers()
+        if not self.collection_mode:
+            self._setup_eviction_backend(metadata, ollama_port, local_rank)
+            self._setup_worker()
+            self._setup_decision_logging(logdir)
+            self._start_workers()
+        else:
+            self.use_classifier = False
+            self.decision_classifier = None
+            self.worker_thread = None
+            self.decision_log_file = None
 
     def _setup_graph_context(self, graph, halo_nodes, train_nid, device):
         """Initialize graph- and partition-related fields."""
@@ -102,6 +108,9 @@ class PrefetchBuffer:
 
         self.window_size = self.period
         self.history_size = 5
+        self.eviction_candidate_frequency = 0
+        self.evicted_refetch_count = 0
+        self.collection_mode = bool(getattr(self.args, "collect_training_for_classifier", False))
 
     def _setup_eviction_backend(self, metadata, ollama_port, local_rank):
         """Select and initialize classifier or LLM decision backend."""
@@ -185,10 +194,16 @@ class PrefetchBuffer:
 
     def _setup_decision_logging(self, logdir):
         """Open the per-rank decision log file."""
+        if self.collection_mode:
+            self.decision_log_file = None
+            return
         self.decision_log_file = open(f"{logdir}/{self.args.decision_model}_{self.rank}.txt", "a")
 
     def _start_workers(self):
         """Start background decision worker thread for current backend."""
+        if self.collection_mode:
+            self.worker_thread = None
+            return
         if self.use_classifier:
             self.worker_thread = threading.Thread(target=self.ml_worker, daemon=True)
         else:
@@ -310,6 +325,30 @@ class PrefetchBuffer:
         update_score_end = time.time()
         return update_score_end - update_score_start
 
+    def pre_update_eviction_candidate_frequency(self, input_nodes_array):
+        """Track frequency of current eviction candidates in the current minibatch."""
+        eviction_candidates_idx, _, num_candidates = self.find_eviction_candidates()
+        if num_candidates == 0:
+            return
+        candidates = self.prefetch_ids[eviction_candidates_idx]
+        self.eviction_candidate_frequency += np.count_nonzero(
+            np.in1d(input_nodes_array, candidates, kind="table")
+        )
+
+    def post_update_eviction_candidate_frequency(self, input_nodes_array):
+        """Track frequency of previously evicted nodes being re-sampled."""
+        if not self.evicted_candidates:
+            return
+        self.evicted_refetch_count += np.count_nonzero(
+            np.in1d(input_nodes_array, list(self.evicted_candidates), assume_unique=False)
+        )
+
+    def reset_eviction_tracker(self):
+        """Reset per-minibatch tracker counters used for offline classifier data collection."""
+        self.eviction_candidate_frequency = 0
+        self.evicted_refetch_count = 0
+        self.num_evicted_nodes = 0
+
     def prefetch(self, input_nodes_array, batch_inputs):
         """Serve minibatch from trainer without eviction."""
         start_prefetch_compute = time.time()
@@ -366,8 +405,13 @@ class PrefetchBuffer:
 
     def prefetch_with_eviction(self, input_nodes_array, batch_inputs, epoch, step):
         """Serve minibatch from trainer with eviction and backend decision loop."""
+        self.num_evicted_nodes = 0
+        self.pre_update_eviction_candidate_frequency(input_nodes_array)
+        self.post_update_eviction_candidate_frequency(input_nodes_array)
         start_prefetch_compute = time.time()
         self.counter += 1
+        if self.collection_mode:
+            self.evict = self.period > 0 and self.counter % self.period == 0
 
         # create a mapping from prefetch_ids to prefetch_features indices
         sort_start = time.time()
@@ -402,65 +446,66 @@ class PrefetchBuffer:
         
         future = None
 
-        # Non-blocking: Check if the decision agent has made a decision
-        try:
-            decision = self.eviction_decision_responses.get_nowait()
-            if "yes, evict" in decision.lower() or "yes" in decision.lower():
-                self.donotevict_counter = 0
-                
-                # Worker is already paused, so we can safely clear the queues
-                with self.eviction_decision_requests.mutex:
-                    self.eviction_decision_requests.queue.clear()
-                with self.eviction_decision_responses.mutex:
-                    self.eviction_decision_responses.queue.clear()
+        if not self.collection_mode:
+            # Non-blocking: Check if the decision agent has made a decision
+            try:
+                decision = self.eviction_decision_responses.get_nowait()
+                if "yes, evict" in decision.lower() or "yes" in decision.lower():
+                    self.donotevict_counter = 0
+                    
+                    # Worker is already paused, so we can safely clear the queues
+                    with self.eviction_decision_requests.mutex:
+                        self.eviction_decision_requests.queue.clear()
+                    with self.eviction_decision_responses.mutex:
+                        self.eviction_decision_responses.queue.clear()
 
-                self.evict = True
-                self.decision = decision
-            elif "no, do not evict" in decision.lower() or "no" in decision.lower():
-                self.donotevict_counter += 1
-                self.evict = False
-                self.decision = decision
+                    self.evict = True
+                    self.decision = decision
+                elif "no, do not evict" in decision.lower() or "no" in decision.lower():
+                    self.donotevict_counter += 1
+                    self.evict = False
+                    self.decision = decision
 
-                # clear all queues
-                with self.eviction_decision_requests.mutex:
-                    self.eviction_decision_requests.queue.clear()
-                with self.eviction_decision_responses.mutex:
-                    self.eviction_decision_responses.queue.clear()
+                    # clear all queues
+                    with self.eviction_decision_requests.mutex:
+                        self.eviction_decision_requests.queue.clear()
+                    with self.eviction_decision_responses.mutex:
+                        self.eviction_decision_responses.queue.clear()
 
-                # Record a pending eviction event for a no-evict decision.
-                if not self.use_classifier:
-                    self.context_agent.store_pending_eviction(
-                        pre_eviction_summary=self.shared_state_store.aggregated_metrics,
-                        num_evicted_nodes=0,  # No nodes evicted.
-                        minibatch_id=self.counter,
-                        status="decision_no_evict",
-                        reason="You decided not to evict."
-                    )
-                self.set_pause_worker(False)  # Unpause the worker thread
-            else:
-                print(f"Rank {self.rank} Epoch {epoch} Step {step} | Invalid decision: {decision}")
-                self.evict = False
-                self.decision = None
+                    # Record a pending eviction event for a no-evict decision.
+                    if not self.use_classifier:
+                        self.context_agent.store_pending_eviction(
+                            pre_eviction_summary=self.shared_state_store.aggregated_metrics,
+                            num_evicted_nodes=0,  # No nodes evicted.
+                            minibatch_id=self.counter,
+                            status="decision_no_evict",
+                            reason="You decided not to evict."
+                        )
+                    self.set_pause_worker(False)  # Unpause the worker thread
+                else:
+                    print(f"Rank {self.rank} Epoch {epoch} Step {step} | Invalid decision: {decision}")
+                    self.evict = False
+                    self.decision = None
 
-                # clear all queues
-                with self.eviction_decision_requests.mutex:
-                    self.eviction_decision_requests.queue.clear()
-                with self.eviction_decision_responses.mutex:
-                    self.eviction_decision_responses.queue.clear()
+                    # clear all queues
+                    with self.eviction_decision_requests.mutex:
+                        self.eviction_decision_requests.queue.clear()
+                    with self.eviction_decision_responses.mutex:
+                        self.eviction_decision_responses.queue.clear()
 
-                # Record a pending eviction event for a no-evict decision.
-                if not self.use_classifier:
-                    self.context_agent.store_pending_eviction(
-                        pre_eviction_summary=self.shared_state_store.aggregated_metrics,
-                        num_evicted_nodes=0,  # No nodes evicted.
-                        minibatch_id=self.counter,
-                        status="invalid_decision",
-                        reason="You did not respond with either 'yes, evict' or 'no, do not evict'"
-                    )
-                self.set_pause_worker(False)  # Unpause the worker thread
-        except queue.Empty:
-            # No decision available yet, carry on with the old value
-            pass
+                    # Record a pending eviction event for a no-evict decision.
+                    if not self.use_classifier:
+                        self.context_agent.store_pending_eviction(
+                            pre_eviction_summary=self.shared_state_store.aggregated_metrics,
+                            num_evicted_nodes=0,  # No nodes evicted.
+                            minibatch_id=self.counter,
+                            status="invalid_decision",
+                            reason="You did not respond with either 'yes, evict' or 'no, do not evict'"
+                        )
+                    self.set_pause_worker(False)  # Unpause the worker thread
+            except queue.Empty:
+                # No decision available yet, carry on with the old value
+                pass
 
         if self.evict:
             evict_start = time.time()
@@ -519,7 +564,7 @@ class PrefetchBuffer:
             total_rpc += time.time() - start_normal_rpc
         
         self.track_per_minibatch(input_nodes_array, hit_indices, self.counter)
-        if not self.evict: # if eviction happened, we do not want to send this to the eviction decision worker; this is stale data
+        if not self.evict and not self.collection_mode: # if eviction happened, we do not want to send this to the eviction decision worker; this is stale data
             # Requests for eviction decision
             if not self.use_classifier:
                 stat = {

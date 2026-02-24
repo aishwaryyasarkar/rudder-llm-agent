@@ -39,3 +39,8 @@ ML_MODEL_DIR=""
 # If empty, runtime falls back to OLLAMA_BIN env var (or 'ollama') and OLLAMA_MODELS env var.
 OLLAMA_BIN=""
 OLLAMA_MODELS_DIR=""
+
+# Optional: collect classifier-training data during runtime.
+COLLECT_TRAINING_FOR_CLASSIFIER="false"
+# Optional output CSV path (per-rank suffix is added automatically).
+TRAINING_DATA_FILEPATH=""

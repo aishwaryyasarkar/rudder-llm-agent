@@ -16,6 +16,7 @@ import dgl
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from collect_samples.collector import TrainingSampleCollector
 
 class Trainer:
     def __init__(self, args, device, data, halo_nodes, ollama_port, local_rank, logdir):
@@ -104,13 +105,37 @@ class Trainer:
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.args.lr)
         self.next_batch_inputs = q.Queue()
         self.next_batch_labels = q.Queue()
-        self.next_batch_blocks = q.Queue()  
+        self.next_batch_blocks = q.Queue()
+        self.next_batch_rpc = q.Queue()
         
         print("Eviction: ", self.args.eviction)
         if not self.args.eviction:
             print("No eviction")
 
         print(f"Total mini batches: {self.num_mini_batches * self.args.num_epochs}")
+        self.recorder = None
+        if self.args.collect_training_for_classifier:
+            if self.args.eviction_period <= 0:
+                print("Warning: --collect_training_for_classifier requires --eviction_period > 0. Skipping collection.")
+            else:
+                if self.args.training_data_filepath:
+                    base, ext = os.path.splitext(self.args.training_data_filepath)
+                    recorder_filepath = f"{base}_rank{self.g.rank()}{ext or '.csv'}"
+                else:
+                    recorder_filepath = f"{logdir}/{self.args.graph_name}_rank{self.g.rank()}_classifier_training.csv"
+                self.recorder = TrainingSampleCollector(
+                    eviction_interval=self.args.eviction_period,
+                    csv_file=recorder_filepath,
+                    rank=self.g.rank(),
+                    graph_name=self.args.graph_name,
+                    batch_size=self.args.batch_size,
+                    num_total_nodes=self.g.number_of_nodes(),
+                    num_partition_nodes=self.g.local_partition.number_of_nodes(),
+                    num_remote_nodes=len(self.halo_nodes),
+                    fan_out=self.args.fan_out,
+                    buffer_size=self.prefetcher.buffer_length,
+                    log=False,
+                )
 
     def _multilabel_f1(self, logits, labels, thr=0.5, eps=1e-9):
         pred = (logits.sigmoid() > thr).to(labels.dtype)
@@ -171,6 +196,7 @@ class Trainer:
             t_rpc = self._fetch_and_process(input_nodes, epoch, step)
             end_process = time.time()
             process_time = end_process - start_process
+            self.next_batch_rpc.put(t_rpc)
             end_total = time.time()
             total_time = end_total - start_total
             return fetch_time, process_time, total_time, True, t_rpc
@@ -251,12 +277,14 @@ class Trainer:
                     if step == 0 and epoch == 1:
                         # First minibatch of the first epoch.
                         batch_inputs, batch_labels, blocks, first_minibatch_sample_time, t_rpc = self._get_first_minibatch(dataloader_iter, epoch, step)
+                        current_batch_rpc = t_rpc
                         take_from_queue = 0
                     else:
                         start_queue = time.time()
                         batch_inputs = self.next_batch_inputs.get()
                         batch_labels = self.next_batch_labels.get()
                         blocks = self.next_batch_blocks.get()
+                        current_batch_rpc = self.next_batch_rpc.get()
                         take_from_queue = time.time() - start_queue
                     if step == self.num_mini_batches - 1:
                         # if last step, reset the dataloader for the next epoch
@@ -329,6 +357,16 @@ class Trainer:
                         sample_time += fetch_time
                     thread_time = time.time() - start_thread_wait
                     wait_for_thread_time += thread_time
+                    if self.recorder is not None:
+                        record = {
+                            "hitrate": self.prefetcher.calculate_hit_rate(),
+                            "num_evicted_nodes": self.prefetcher.num_evicted_nodes,
+                            "T_rpc": current_batch_rpc,
+                            "pre_candidate_freq": self.prefetcher.eviction_candidate_frequency,
+                            "post_candidate_freq": self.prefetcher.evicted_refetch_count,
+                        }
+                        self.recorder.record(**record)
+                        self.prefetcher.reset_eviction_tracker()
                     step += 1
             toc = time.time()
             # print(

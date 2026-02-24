@@ -138,7 +138,11 @@ def main(args):
     logdir = args.summary_filepath.replace(".txt", "")
     os.makedirs(logdir, exist_ok=True) 
 
-    if args.decision_model not in CLASSIFIER_MODELS:
+    if args.collect_training_for_classifier:
+        ollama_port = None
+        global_ollama_port = None
+        print("Collection mode enabled: skipping LLM/classifier decision backends and Ollama startup.")
+    elif args.decision_model not in CLASSIFIER_MODELS:
         """ Ollama Server """
         ollama_port = 11434 + local_rank
         global_ollama_port = ollama_port
@@ -346,6 +350,18 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--enable_finetune", type=utils.str2bool, default=False, help="Enable or disable finetuning of classifier models. Accepts: True or False"
+    )
+    parser.add_argument(
+        "--collect_training_for_classifier",
+        type=utils.str2bool,
+        default=False,
+        help="Enable/disable collection of classifier-training records during runtime.",
+    )
+    parser.add_argument(
+        "--training_data_filepath",
+        type=str,
+        default=None,
+        help="Optional output CSV path for collected classifier-training data (per-rank).",
     )
 
     parser.add_argument("--finetune_interval", type=int, nargs="?", const=50, default=None, help="Interval for finetuning; if provided without a value, defaults to 50.")

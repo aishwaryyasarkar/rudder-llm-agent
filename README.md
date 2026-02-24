@@ -262,7 +262,20 @@ fi
 ```
 
 ## Training Non-LLM Classifier Models
-Each script in `classifier_models` supports: `--train_csv`, `--test_csv`, and  `--model_dir`. You will need to collect training data.
+Each script in `classifier_models` supports: `--train_csv`, `--test_csv`, and `--model_dir`.
+
+First, build merged/normalized datasets and split into train/test from collected runtime CSVs:
+
+```bash
+python collect_samples/process_csv.py \
+  --base_dir /path/to/collected_tracker_csvs \
+  --output_dir classifier_models
+```
+
+This produces:
+- `classifier_models/merged_with_labels_normalized.csv`
+- `classifier_models/training_dataset.csv`
+- `classifier_models/test_dataset.csv`
 
 ### Example: Logistic Regression
 
