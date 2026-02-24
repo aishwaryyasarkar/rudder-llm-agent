@@ -1,10 +1,29 @@
 # Rudder
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.4.0%2Bcu121-ee4c2c)
+![DGL](https://img.shields.io/badge/DGL-2.5-green)
+![Ollama](https://img.shields.io/badge/LLM-Ollama-black)
 
-Rudder is a distributed GNN training system with adaptive prefetch-and-eviction driven by either:
-- LLM-based decision agents (served through Ollama), or
-- non-LLM ML agents (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM).
+Rudder is an adaptive prefetch-and-replacement system for distributed GNN training, implemented in DistDGL. During neighborhood sampling, it continuously decides what to keep in a fixed-size persistent buffer and when to replace stale remote-node features, so communication overhead is reduced while training progresses.
+
+Rudder supports two decision backends:
+- LLM-based decision agents (served through Ollama)
+- non-LLM classifiers (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM)
 
 The implementation in this repository corresponds to the Rudder paper artifact (see `ICS26_Rudder.pdf` in your release bundle).
+
+## Core Features
+
+- Distributed DistDGL + PyTorch training pipeline.
+- Two prefetchers:
+  - `Prefetch` (standard)
+  - `MemoryEfficientPrefetcher` (memory-optimized) (`--use_memory_efficient_prefetcher`)
+- Configurable buffer initialization (`--prefetcher_init`):
+  - `empty` starts with an empty/sentinel buffer
+  - `degree` warm-starts with high-degree halo nodes (often better early hit rate)
+  - `random` starts from a random halo subset
+- Agent-based eviction decisions with both LLM and classical ML models.
+- Optional online finetuning hooks for ML.
 
 ## Repository Layout
 
@@ -40,19 +59,6 @@ rudder-gnn/
 │   ├── gpu.sh                 # GPU job script
 └── README.md
 ```
-
-## Core Features
-
-- Distributed DistDGL + PyTorch training pipeline.
-- Two prefetchers:
-  - `Prefetch` (standard)
-  - `MemoryEfficientPrefetcher` (memory-optimized)
-- Automatic default prefetcher behavior:
-  - `ogbn-papers100M` -> memory-efficient prefetcher
-  - others -> standard prefetcher
-  - override via CLI (`--use_memory_efficient_prefetcher`)
-- Agent-based eviction decisions with both LLM and non-LLM models.
-- Optional online finetuning hooks for non-LLM agents.
 
 ## Environment Setup
 
