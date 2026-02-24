@@ -8,7 +8,7 @@ Rudder is an adaptive prefetch-and-replacement system for distributed GNN traini
 
 Rudder supports two decision backends:
 - LLM-based decision agents (served through Ollama)
-- non-LLM classifiers (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM)
+- ML Classifiers (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM)
 
 The implementation in this repository corresponds to the Rudder paper artifact (see `ICS26_Rudder.pdf` in your release bundle).
 
