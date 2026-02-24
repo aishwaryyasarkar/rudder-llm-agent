@@ -77,7 +77,7 @@ System/runtime expectations:
 - Valid `ip_config` and graph partition config (`part_config`).
 - Graph partitions with required node fields: `features`, `labels`, `train_mask`, `val_mask`, `test_mask` (and optionally `trainer_id`).
 
-### 1) Create Python Environment
+### Step 1: Create Python Environment
 
 ```bash
 python -m venv .venv
@@ -85,7 +85,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 ```
 
-### 2) Install Python Dependencies
+### Step 2: Install Python Dependencies
 
 Install framework versions compatible with your CUDA/cluster setup first (PyTorch + DGL), then install the rest:
 
@@ -93,7 +93,7 @@ Install framework versions compatible with your CUDA/cluster setup first (PyTorc
 pip install numpy pandas scikit-learn numba xgboost pytorch-tabnet joblib tqdm
 ```
 
-### 3) Install Ollama (LLM Agents Only)
+### Step 3: Install Ollama (LLM Agents Only)
 
 macOS:
 
@@ -107,7 +107,7 @@ Linux:
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### 4) Pull Required Ollama Model(s)
+### Step 4: Pull Required Ollama Model(s)
 
 Do this before launching SLURM jobs, so model weights are already present in your Ollama model store.
 
@@ -123,7 +123,7 @@ Model selection guidance:
 - GGUF variants are generally the most reliable format for Ollama runtime compatibility/performance.
 - If sourcing from Hugging Face, verify the model is available in an Ollama-compatible form (or has a GGUF variant/tag usable by Ollama).
 
-### 5) Optional Ollama Environment Variables
+### Step 5: Optional Ollama Environment Variables
 
 ```bash
 export OLLAMA_BIN="$(which ollama)"
