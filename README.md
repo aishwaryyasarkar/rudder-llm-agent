@@ -44,7 +44,7 @@ rudder-gnn/
 │   ├── local_agents.py
 │   ├── classifiers.py
 │   └── start_ollama.py
-├── classifier_models/                 # Offline training scripts for non-LLM classifiers
+├── classifier_models/         # Offline training scripts for non-LLM classifiers
 │   ├── mlp/mlp.py
 │   ├── tabnet/tabnet.py
 │   ├── lr/lr.py
