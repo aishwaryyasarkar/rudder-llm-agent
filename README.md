@@ -62,7 +62,7 @@ rudder-gnn/
 
 ## Environment Setup
 
-Minimum expected stack:
+Requirements:
 - Python 3.10+
 - PyTorch (distributed build)
 - DGL with distributed support
@@ -131,54 +131,7 @@ export OLLAMA_MODELS="/path/to/ollama/models"
 ```
 
 These are optional because Rudder also accepts `--ollama_bin` and `--ollama_models_dir`.
-
-## Running with SLURM Scripts
-
-The SLURM workflow in this repo is:
-
-1. `example_config.sh` (set experiment values)
-2. `set_params.sh` (expands combinations and calls `submit.sh`)
-3. `submit.sh` (dispatches to `cpu.sh` or `gpu.sh`)
-4. `cpu.sh` / `gpu.sh` (launch distributed training via `launch.py`)
-
-### Step 1: Partition the input graph
-
-Before submitting Rudder jobs, generate DistDGL partitions for your dataset using the MassiveGNN partitioning intructions : [MassiveGNN: Partition Graph](https://github.com/pnnl/MassiveGNN?tab=readme-ov-file#partition-graph)
-
-Use the partition artifacts from that step as your `PARTITION_DIR` / `--part_config` inputs in this repository.
-
-### Step 2: Edit config file  [`slurm/example_config.sh`](slurm/example_config.sh) 
-
-#### Key fields:
-- `MODE`, `MODEL`, `DECISION_MODEL`
-- `DATASET_NAME`, `NUM_NODES`, `NUM_TRAINERS`
-- `PROJ_PATH`, `PARTITION_DIR`, `LOGS_DIR`, `DATA_DIR`
-- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"`)
-
-### Step 3: Submit jobs
-
-[`slurm/set_params.sh`](slurm/set_params.sh) calls [`slurm/submit.sh`](slurm/submit.sh) to launch either [`slurm/cpu.sh`](slurm/cpu.sh) or [`slurm/gpu.sh`](slurm/gpu.sh) based on `MODE`:
-
-```bash
-cd slurm
-bash set_params.sh --config example_config.sh
-```
-
-### Optional: CLI Args Instead of Config
-
-```bash
-bash set_params.sh --help
-```
-
-### SLURM Notes
-
-- [`submit.sh`](slurm/submit.sh) chooses backend automatically from mode:
-  - `cpu` -> `gloo`
-  - `gpu` -> `nccl`
-- [`slurm/cpu.sh`](slurm/cpu.sh) / [`slurm/gpu.sh`](slurm/gpu.sh) build an `ip_config` file from allocated nodes.
-- Job time and log paths are set in [`slurm/submit.sh`](slurm/submit.sh) from dataset/model/node settings.
-
-## Running Pytorch Distributed Training
+## Rudder CLI arguments
 
 Entry point: [`dist_gnn/main.py`](dist_gnn/main.py)
 
@@ -232,104 +185,103 @@ Note: Why [`launch.py`](launch.py) is required:
 - Optional binary from `--ollama_bin` or env `OLLAMA_BIN` (default: `ollama`)
 - In `dist_gnn/main.py`, Ollama startup is skipped for classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`.
 
-### Example run cmd using LLM Agents
+## Running Rudder-based GNN training
 
-```bash
-if [ "$MODEL" == "sage" ]; then
-  echo "Running SAGE model..."
-  $PYTHON_PATH $PROJ_PATH/launch.py \
-    --workspace $PROJ_PATH \
-    --num_trainers $GPUS_PER_NODE \
-    --num_samplers $SAMPLER_PROCESSES \
-    --num_servers 1 \
-    --part_config $PARTITION_DIR \
-    --ip_config $IP_CONFIG_FILE \
-    --num_omp_threads $OMP_THREADS \
-    "$PYTHON_PATH dist_gnn/main.py --graph_name $DATASET_NAME \
-      --backend $BACKEND \
-      --ip_config $IP_CONFIG_FILE --num_epochs $EPOCHS --batch_size $BATCH_SIZE \
-      --num_gpus $GPUS_PER_NODE --summary_filepath $SUMMARYFILE \
-      --prefetch_fraction $PREFETCH_FRACTION --eviction_period $EVICTION_PERIOD --alpha $ALPHA \
-      --eviction $EVICTION \
-      --num_numba_threads $NUMBA_THREADS \
-      --hit_rate_flag $HIT_RATE \
-      --model $MODEL \
-      --prefetcher_init $PREFETCHER_INIT \
-      --decision_model $DECISION_MODEL \
-      --enable_finetune $ENABLE_FINETUNE \
-      --finetune_interval $FINETUNE_INTERVAL"
-fi
+We provide 4 scripts in [`slurm/`](slurm):
+
+1. `example_config.sh` (to set parameters using a config file)
+2. `set_params.sh` (calls `submit.sh`)
+3. `submit.sh` (submits job using allocations in `cpu.sh` or `gpu.sh`)
+4. `cpu.sh` / `gpu.sh` (launch distributed training via `launch.py`)
+
+### Step 1: Partition the input graph
+
+Before submitting Rudder jobs, generate DistDGL partitions for your dataset using the provided script in `partition/`. 
+```
+cd partition
+sbatch partition.sh <dataset_name> <partition_method> "<num_parts_list>" <DATA_DIR> <PARTITION_DIR>
 ```
 
-## Training Non-LLM Classifier Models
-Each script in `classifier_models` supports: `--train_csv`, `--test_csv`, and `--model_dir`.
+### Step 2: Edit config file  [`slurm/example_config.sh`](slurm/example_config.sh) 
 
-First, build merged/normalized datasets and split into train/test from collected runtime CSVs:
+#### Key fields:
+- `MODE`, `MODEL`, `DECISION_MODEL`
+- `DATASET_NAME`, `NUM_NODES`, `NUM_TRAINERS`
+- `PROJ_PATH`, `PARTITION_DIR`, `LOGS_DIR`, `DATA_DIR`
+- Optional: `ML_MODEL_DIR` (if empty, defaults to `"$PROJ_PATH/classifier_models/$DECISION_MODEL/trained_model"`)
+
+### Step 3: Submit jobs
+
+[`slurm/set_params.sh`](slurm/set_params.sh) calls [`slurm/submit.sh`](slurm/submit.sh) to launch either [`slurm/cpu.sh`](slurm/cpu.sh) or [`slurm/gpu.sh`](slurm/gpu.sh) based on `MODE`:
+
+```bash
+cd slurm
+bash set_params.sh --config example_config.sh
+```
+
+### Optional: CLI Args Instead of Config
+
+```bash
+bash set_params.sh --help
+```
+
+### SLURM Notes
+
+- [`submit.sh`](slurm/submit.sh) chooses backend automatically from mode:
+  - `cpu` -> `gloo`
+  - `gpu` -> `nccl`
+- [`slurm/cpu.sh`](slurm/cpu.sh) / [`slurm/gpu.sh`](slurm/gpu.sh) build an `ip_config` file from allocated nodes.
+- Job time and log paths are set in [`slurm/submit.sh`](slurm/submit.sh) from dataset/model/node settings.
+
+### Step 4 (Optional): Collect runtime samples to train the classifiers 
+
+If you prefer to use Rudder with ML Classifier backend instead of LLM agents, you need to generate training data and train the classifiers offline.
+
+#### 4.1 Set the following in [`slurm/example_config.sh`](slurm/example_config.sh):
+
+- `COLLECT_TRAINING_FOR_CLASSIFIER="true"`
+- `TRAINING_DATA_FILEPATH="<output_dir_or_csv_path>"`
+
+Notes: In collection mode, eviction decisions are policy-driven (no LLM/classifier inference). This mode is only for generating training samples. You must collect enough data to train the classifiers encompassing multiple datasets, hyperparameters (both GNN and eviction parameters) and partition combinations.
+
+#### 4.2 Collect samples by running Rudder in collection mode:
+
+```bash
+cd slurm
+bash set_params.sh --config example_config.sh
+```
+
+#### 4.3 Merge rank CSV files and build train/test datasets:
 
 ```bash
 python collect_samples/process_csv.py \
-  --base_dir /path/to/collected_tracker_csvs \
+  --base_dir <TRAINING_DATA_FILEPATH> \
   --output_dir classifier_models
 ```
 
-This produces:
+This generates:
 - `classifier_models/merged_with_labels_normalized.csv`
 - `classifier_models/training_dataset.csv`
 - `classifier_models/test_dataset.csv`
 
-### Example: Logistic Regression
+#### 4.4 Train any classifier using those train/test CSVs. Example (Logistic Regression):
 
 ```bash
 python classifier_models/lr/lr.py \
-  --train_csv /path/to/training_dataset.csv \
-  --test_csv /path/to/test_dataset.csv \
-  --model_dir /path/to/classifier_models/lr_trained
+  --train_csv classifier_models/training_dataset.csv \
+  --test_csv classifier_models/test_dataset.csv \
+  --model_dir classifier_models/lr/trained_model
 ```
 
-### Example: MLP
-
-```bash
-python classifier_models/mlp/mlp.py \
-  --train_csv /path/to/training_dataset.csv \
-  --test_csv /path/to/test_dataset.csv \
-  --model_dir /path/to/classifier_models/mlp_trained
-```
-
-## Expected Non-LLM CSV Schema
-
-Training scripts use the following fields:
-
-Features:
-- `Rank`
-- `Batch_Size`
-- `Num_Total_Nodes`
-- `Num_Partition_Nodes`
-- `Num_Remote_Nodes`
-- `buffer_size`
-- `Eviction_Interval_ID`
-- `Num_Evicted_Nodes`
-- `Pre_Avg_Hitrate`
-- `Pre_Avg_T_rpc`
-- `Dataset` (categorical)
-
-Label:
-- `eviction_label_norm`
-
-## Outputs
-
-Training runtime:
-- Summary metrics appended to `--summary_filepath`
-- Rank-specific runtime logs under a directory derived from `summary_filepath`
-
-Non-LLM classifier training:
-- Preprocessor: `eviction_preprocessor.joblib`
-- Model artifacts (e.g., `lr_eviction.joblib`, `rf_eviction.joblib`, `svm_eviction.joblib`, `xgb_eviction.json`, `tabnet_eviction.zip`, `mlp_eviction.pth`)
+#### 4.5 Switch back for classifier-based runtime decisions in [`slurm/example_config.sh`](slurm/example_config.sh):
+- `COLLECT_TRAINING_FOR_CLASSIFIER="false"`
+- `DECISION_MODEL="lr"` (or `mlp/tabnet/rf/xgb/svm`)
+- `ML_MODEL_DIR="<path-to-trained-model-dir>"`
 
 ## Reproducibility Notes
 
 - Random seeds are set in several model scripts.
 - Performance and behavior vary with partitioning strategy, launcher config, hardware topology, and Ollama model choice.
-- For release, pin package versions in your environment file and include exact dataset partition artifacts used in experiments.
 
 ## Paper / Citation
 

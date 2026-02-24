@@ -119,8 +119,16 @@ class Trainer:
                 print("Warning: --collect_training_for_classifier requires --eviction_period > 0. Skipping collection.")
             else:
                 if self.args.training_data_filepath:
-                    base, ext = os.path.splitext(self.args.training_data_filepath)
-                    recorder_filepath = f"{base}_rank{self.g.rank()}{ext or '.csv'}"
+                    output_path = self.args.training_data_filepath
+                    base, ext = os.path.splitext(output_path)
+                    if ext.lower() == ".csv":
+                        recorder_filepath = f"{base}_rank{self.g.rank()}{ext}"
+                    else:
+                        os.makedirs(output_path, exist_ok=True)
+                        recorder_filepath = os.path.join(
+                            output_path,
+                            f"{self.args.graph_name}_rank{self.g.rank()}_classifier_training.csv",
+                        )
                 else:
                     recorder_filepath = f"{logdir}/{self.args.graph_name}_rank{self.g.rank()}_classifier_training.csv"
                 self.recorder = TrainingSampleCollector(
