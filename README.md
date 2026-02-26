@@ -276,8 +276,6 @@ python classifier_models/lr/lr.py \
 
 ## Citation
 
-Add the final citation metadata from your camera-ready paper artifact here.
-
 ```bibtex
 % TODO: replace with final BibTeX entry for the Rudder paper.
 ```
