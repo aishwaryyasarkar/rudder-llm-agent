@@ -10,8 +10,6 @@ Rudder supports two decision backends:
 - LLM-based decision agents (served through Ollama)
 - ML Classifiers (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM)
 
-The implementation in this repository corresponds to the Rudder paper artifact (see `ICS26_Rudder.pdf` in your release bundle).
-
 ## Core Features
 
 - Distributed DistDGL + PyTorch training pipeline.
@@ -276,7 +274,7 @@ python classifier_models/lr/lr.py \
 - Random seeds are set in several model scripts.
 - Performance and behavior vary with partitioning strategy, launcher config, hardware topology, and Ollama model choice.
 
-## Paper / Citation
+## Citation
 
 Add the final citation metadata from your camera-ready paper artifact here.
 
