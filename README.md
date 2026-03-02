@@ -9,12 +9,11 @@
 
 Rudder is a multi-agent system embedded in AWS DistDGL that dynamically manages local fixed-size persistent buffers of remote node features to accelerate distributed mini-batch GNN training on large partitioned graphs. During training, each trainer (GPU) runs a co-located LLM agent that uses in-context learning (ICL) to determine replacement strategies for the local buffers. This adaptive buffer management mitigates the communication bottleneck from frequent, irregular remote feature fetches and reduces cross-partition communication and improves end-to-end training performance.
 
-
-For full details, see our paper: [Rudder: Steering Prefetching in Distributed GNN Training using LLM Agents](https://arxiv.org/abs/2602.23556) (ICS 2026). This repository contains the full implementation.
-
 Rudder supports two decision backends:
 - LLM-based decision agents (served through Ollama)
 - ML Classifiers (MLP, TabNet, Logistic Regression, Random Forest, XGBoost, SVM)
+
+For full details, see our paper: [Rudder: Steering Prefetching in Distributed GNN Training using LLM Agents](https://arxiv.org/abs/2602.23556) (ICS 2026).
 
 ## Core Features
 
