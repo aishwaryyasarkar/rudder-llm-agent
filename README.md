@@ -17,7 +17,7 @@ For full details, see our paper: [Rudder: Steering Prefetching in Distributed GN
 
 ## Core Features
 
-- Distributed DistDGL + PyTorch training pipeline.
+- Distributed DistDGL + PyTorch training pipeline
 - Two prefetchers:
   - `Prefetch` (standard)
   - `MemoryEfficientPrefetcher` (memory-optimized) (`--use_memory_efficient_prefetcher`)
@@ -25,8 +25,8 @@ For full details, see our paper: [Rudder: Steering Prefetching in Distributed GN
   - `empty` starts with an empty/sentinel buffer
   - `degree` warm-starts with high-degree halo nodes (often better early hit rate)
   - `random` starts from a random halo subset
-- Agent-based eviction decisions with both LLM and classical ML models.
-- Optional online finetuning hooks for ML.
+- Agent-based replacement decisions
+- Optional online finetuning hooks for ML classifiers
 
 ## Repository Layout
 
@@ -43,11 +43,11 @@ rudder-gnn/
 ├── models/                    # GNN models
 │   ├── graphsage.py
 │   └── gat.py
-├── agents/                    # Eviction agents + Ollama server helper
+├── agents/                    # Replacement agents + Ollama server
 │   ├── local_agents.py
 │   ├── classifiers.py
 │   └── start_ollama.py
-├── classifier_models/         # Offline training scripts for non-LLM classifiers
+├── classifier_models/         # Offline training scripts for ML classifiers
 │   ├── mlp/mlp.py
 │   ├── tabnet/tabnet.py
 │   ├── lr/lr.py
@@ -145,14 +145,14 @@ Note: args marked `(launcher)` are usually injected by DistDGL launch wrappers/s
 - `--num_gpus`: GPUs visible per node/process setup (`0` means CPU mode).
 - `--summary_filepath`: output summary file path (rank-level and aggregate stats appended).
 - `--prefetch_fraction`: initial fraction of halo nodes to prefetch.
-- `--eviction_period`: decision interval for eviction.
-- `--alpha`: decay factor used in eviction scoring.
-- `--eviction`: enable/disable eviction logic.
+- `--eviction_period`: decision interval for eviction and replacement.
+- `--alpha`: decay factor used in scoring policy.
+- `--eviction`: enable/disable eviction and replacement logic.
 - `--num_numba_threads`: Numba thread count used by prefetch/score update paths.
 - `--hit_rate_flag`: toggles hit-rate-based decision input behavior.
 - `--model`: GNN model (`sage` or `gat`).
 - `--prefetcher_init`: prefetch buffer initialization mode (`degree`, `empty`, `random`).
-- `--decision_model`: eviction decision model.
+- `--decision_model`: eviction/replacement decision model.
   - Classifier models: `mlp`, `tabnet`, `lr`, `rf`, `xgb`, `svm`
   - Agent models (LLM): any Ollama model name string
 - `--ml_model_dir`: path to directory that contained trained ML Classifiers.
@@ -238,7 +238,7 @@ If you prefer to use Rudder with ML Classifier backend instead of LLM agents, yo
 - `COLLECT_TRAINING_FOR_CLASSIFIER="true"`
 - `TRAINING_DATA_FILEPATH="<output_dir_or_csv_path>"`
 
-Notes: In collection mode, eviction decisions are policy-driven (no LLM/classifier inference). This mode is only for generating training samples. You must collect enough data to train the classifiers encompassing multiple datasets, hyperparameters (both GNN and eviction parameters) and partition combinations.
+Notes: In collection mode, replacement decisions are policy-driven (no LLM/classifier inference). This mode is only for generating training samples. You must collect enough data to train the classifiers encompassing multiple datasets, hyperparameters (both GNN and replacement parameters) and partition combinations.
 
 #### 4.2 Collect samples by running Rudder in collection mode:
 
