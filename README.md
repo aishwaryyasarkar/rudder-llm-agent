@@ -15,8 +15,12 @@ Rudder supports two decision backends:
 
 For full details, see our paper: [Rudder: Steering Prefetching in Distributed GNN Training using LLM Agents](https://arxiv.org/abs/2602.23556) (ICS 2026).
 
-![High Level overview of Rudder](rudder.png)
-*Figure: High-level overview of Rudder.*
+<p align="center">
+  <img src="rudder.png" alt="High-level overview of Rudder" width="800">
+  <br>
+  <em>High-level overview of Rudder</em>
+</p>
+
 
 ## Core Features
 
