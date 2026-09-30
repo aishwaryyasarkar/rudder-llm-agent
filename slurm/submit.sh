@@ -27,6 +27,14 @@ OLLAMA_BIN=${25} # optional override for ollama executable
 OLLAMA_MODELS_DIR=${26} # optional override for ollama models directory
 COLLECT_TRAINING_FOR_CLASSIFIER=${27} # whether to collect classifier-training data
 TRAINING_DATA_FILEPATH=${28} # optional output CSV path for collected training data
+RUN_MODE=${29:-train}
+CHECKPOINT_DIR=${30:-}
+CHECKPOINT_PATH=${31:-}
+OUTPUT_DIR=${32:-}
+SAVE_SCORES=${33:-false}
+BATCH_SIZE_EVAL=${34:-100000}
+PREDICTION_THRESHOLD=${35:-0.5}
+
 # echo "Decision model: $DECISION_MODEL"
 if [ "$MODE" == "cpu" ]; then
     BACKEND=$2
@@ -148,13 +156,15 @@ for DATASET in $DATASET_NAME; do
                             "$DATASET" "$PARTITION" "$NODES" "$SAMPLER_PROCESSES" "$SUMMARYFILE" "$IP_CONFIG_FILE" "$TRAINERS" "$BACKEND" \
                             "$EVICTION_PERIOD" "$PREFETCH_FRACTION" "$ALPHA" "$HIT_RATE" "$MODEL" "$DATA_DIR" "$PROJ_PATH" "$PARTITION_DIR" \
                             "$PREFETCHER_INIT" "$DECISION_MODEL" "$ENABLE_FINETUNE" "$BATCH_SIZE" "$FINETUNE_INTERVAL" "$ML_MODEL_DIR" \
-                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH"
+                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH" \
+                            "$RUN_MODE" "$CHECKPOINT_DIR" "$CHECKPOINT_PATH" "$OUTPUT_DIR" "$SAVE_SCORES" "$BATCH_SIZE_EVAL" "$PREDICTION_THRESHOLD"
                     elif [ "$MODE" == "cpu" ]; then
                         sbatch -N "$NODES" -q "$QUEUE" --job-name "$JOBNAME" -o "$OUTFILE" -e "$ERRFILE" --time="$TIME" "$SCRIPT" \
                             "$DATASET" "$PARTITION" "$NODES" "$SAMPLER_PROCESSES" "$SUMMARYFILE" "$IP_CONFIG_FILE" "$BACKEND" "$TRAINERS" \
                             "$EVICTION_PERIOD" "$PREFETCH_FRACTION" "$ALPHA" "$HIT_RATE" "$MODEL" "$DATA_DIR" "$PROJ_PATH" "$PARTITION_DIR" \
                             "$PREFETCHER_INIT" "$DECISION_MODEL" "$ENABLE_FINETUNE" "$BATCH_SIZE" "$FINETUNE_INTERVAL" "$ML_MODEL_DIR" \
-                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH"
+                            "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH" \
+                            "$RUN_MODE" "$CHECKPOINT_DIR" "$CHECKPOINT_PATH" "$OUTPUT_DIR" "$SAVE_SCORES" "$BATCH_SIZE_EVAL" "$PREDICTION_THRESHOLD"
                     fi
                 done
             done

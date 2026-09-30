@@ -130,6 +130,8 @@ if __name__ == "__main__":
             sym_g.ndata[key] = g.ndata[key]
         g = sym_g
 
+    # Keep application IDs as a feature; DGL reshuffles it with the nodes.
+    g.ndata["original_node_id"] = th.arange(g.num_nodes(), dtype=th.int64)
     dgl.distributed.partition_graph(
         g,
         args.dataset,

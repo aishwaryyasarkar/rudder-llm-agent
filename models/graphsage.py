@@ -45,7 +45,7 @@ class DistSAGE(nn.Module):
                 name = "h_last"
             else:
                 out_dim = self.n_hidden
-                name = "h"
+                name = f"h_{i}"
             y = dgl.distributed.DistTensor(
                 (g.num_nodes(), out_dim),
                 th.float32,

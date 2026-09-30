@@ -3,8 +3,6 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from prefetch.prefetch import PrefetchBuffer
-from models.graphsage import DistSAGE
-from models.gat import GAT
 import utils
 from concurrent.futures import ThreadPoolExecutor
 import queue as q
@@ -17,6 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collect_samples.collector import TrainingSampleCollector
+from dist_gnn.checkpoint import build_model, save_training_checkpoint, metric_counts, metric_from_counts
 
 class Trainer:
     def __init__(self, args, device, data, halo_nodes, ollama_port, local_rank, logdir):
@@ -76,24 +75,18 @@ class Trainer:
             shuffle=True,
             drop_last=False,
         )
-        if args.model == "sage":
-            self.model = DistSAGE(
-                self.in_feats,
-                self.args.num_hidden,
-                self.n_classes,
-                self.args.num_layers,
-                F.relu,
-                self.args.dropout,
-            )
-        elif args.model == "gat":
-            self.model = GAT(
-                self.in_feats,
-                self.args.num_hidden,
-                self.n_classes,
-                self.args.num_layers,
-                self.args.num_heads,
-                F.relu
-            )
+        self.model_config = {
+            "model": args.model, "in_feats": self.in_feats, "n_classes": self.n_classes,
+            "num_hidden": args.num_hidden, "num_layers": args.num_layers,
+            "num_heads": args.num_heads, "dropout": args.dropout,
+            "is_multilabel": self.is_multilabel, "class_ids": args.class_ids,
+        }
+        self.graph_metadata = {
+            "graph_name": args.graph_name, "num_nodes": self.g.num_nodes(),
+            "feature_key": "features", "preprocessing": "as stored in graph partitions",
+        }
+        self.model = build_model(self.model_config)
+        self.best_validation_metric = float("-inf")
         if self.is_multilabel:
             # Multi-label: each class is independent; use logits + BCE
             self.loss_fcn = nn.BCEWithLogitsLoss()
@@ -163,13 +156,17 @@ class Trainer:
             elif self.args.model == "gat":
                 pred = self.model.module.inference(self.g, self.g.ndata["features"], self.args.num_heads, self.device, self.args.batch_size_eval)
         self.model.module.train()
-        if self.is_multilabel:
-            val_f1  = self._multilabel_f1(pred[self.val_nid],  self.g.ndata["labels"][self.val_nid].float())
-            test_f1 = self._multilabel_f1(pred[self.test_nid], self.g.ndata["labels"][self.test_nid].float())
-            return val_f1, test_f1
-        else:
-            return utils.compute_acc(pred[self.val_nid], self.g.ndata["labels"][self.val_nid]), \
-                utils.compute_acc(pred[self.test_nid], self.g.ndata["labels"][self.test_nid])
+        metrics = []
+        for node_ids in (self.val_nid, self.test_nid):
+            counts = th.zeros(3 if self.is_multilabel else 2, dtype=th.float64, device=self.device)
+            for offset in range(0, len(node_ids), self.args.batch_size_eval):
+                ids = node_ids[offset:offset + self.args.batch_size_eval]
+                counts += metric_counts(pred[ids], self.g.ndata["labels"][ids], self.is_multilabel).to(self.device)
+            th.distributed.all_reduce(counts)
+            if not self.is_multilabel and counts[1].item() == 0:
+                raise ValueError("Evaluation split has no valid labels")
+            metrics.append(metric_from_counts(counts, self.is_multilabel))
+        return tuple(metrics)
 
     def _get_first_minibatch(self, dataloader_iter, epoch, step):
         start_first_minibatch = time.time()
@@ -393,6 +390,7 @@ class Trainer:
             sample_time_list.append(sample_time)
             wait_for_thread.append(wait_for_thread_time)
 
+            val_acc = None
             if epoch % self.args.eval_every == 0 or epoch == self.args.num_epochs:
                 start = time.time()
                 val_acc, test_acc = self.evaluate()
@@ -401,6 +399,9 @@ class Trainer:
                     f"Test Acc {test_acc:.4f}, time: {time.time() - start:.4f}"
                 )
                 eval_time.append(time.time() - start)
+            self.best_validation_metric = save_training_checkpoint(
+                self.model, self.model_config, self.graph_metadata,
+                self.args.checkpoint_dir, epoch, val_acc, self.best_validation_metric, self.device)
         print("Total time prefetch was called: ", self.prefetcher.counter)
         self.prefetcher.close() 
         
