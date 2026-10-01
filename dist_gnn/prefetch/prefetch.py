@@ -838,8 +838,17 @@ class PrefetchBuffer:
     def load_runtime_state_dict(self, state):
         """Restore a compatible per-rank Rudder state and rebuild cached features."""
         expected = self._runtime_signature()
-        if state.get("signature") != expected:
-            raise ValueError("Rudder checkpoint does not match this graph, partition, or prefetch configuration")
+        saved = state.get("signature", {})
+        mismatches = {
+            key: {"saved": saved.get(key), "current": expected.get(key)}
+            for key in sorted(set(saved) | set(expected))
+            if saved.get(key) != expected.get(key)
+        }
+        if mismatches:
+            raise ValueError(
+                "Rudder checkpoint does not match this graph, partition, or "
+                f"prefetch configuration. Mismatched fields: {mismatches}"
+            )
 
         self.prefetch_ids = state["prefetch_ids"].numpy().astype(np.int32, copy=True)
         self.eviction_score = state["eviction_score"].numpy().astype(np.float32, copy=True)
