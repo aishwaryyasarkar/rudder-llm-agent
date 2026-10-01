@@ -81,7 +81,8 @@ def _optimizer_to_device(optimizer, device):
 
 def save_model_checkpoint(model, optimizer, path, epoch, model_config,
                           validation_metric=None, best_metric=float("-inf"),
-                          save_last=True, runtime_state_saved=False):
+                          save_last=True, runtime_state_saved=False,
+                          state_rank=None):
     """Save scheduled latest state and any newly improved best model."""
     module = _module(model)
     device = next(module.parameters()).device
@@ -89,8 +90,16 @@ def save_model_checkpoint(model, optimizer, path, epoch, model_config,
                 and validation_metric > best_metric)
     next_best = validation_metric if improved else best_metric
 
-    rng_states = [None] * torch.distributed.get_world_size()
-    torch.distributed.all_gather_object(rng_states, _rng_state())
+    if state_rank is None:
+        state_rank = torch.distributed.get_rank()
+    rng_entries = [None] * torch.distributed.get_world_size()
+    torch.distributed.all_gather_object(
+        rng_entries, {"state_rank": int(state_rank), "state": _rng_state()}
+    )
+    rng_states = [entry["state"] for entry in rng_entries]
+    rng_states_by_rank = {
+        entry["state_rank"]: entry["state"] for entry in rng_entries
+    }
     error = None
     if torch.distributed.get_rank() == 0:
         try:
@@ -104,6 +113,7 @@ def save_model_checkpoint(model, optimizer, path, epoch, model_config,
                 "model_state_dict": _cpu_copy(module.state_dict()),
                 "optimizer_state_dict": _cpu_copy(optimizer.state_dict()),
                 "rng_states": rng_states,
+                "rng_states_by_rudder_rank": rng_states_by_rank,
             }
             path = Path(path)
             if save_last:
@@ -122,7 +132,8 @@ def save_model_checkpoint(model, optimizer, path, epoch, model_config,
     return next_best
 
 
-def load_training_checkpoint(model, optimizer, path, model_config, device):
+def load_training_checkpoint(model, optimizer, path, model_config, device,
+                             state_rank=None):
     """Restore model, optimizer, epoch, best metric, and this rank's RNG."""
     artifact = torch.load(path, map_location="cpu", weights_only=True)
     if artifact.get("format_version") != FORMAT_VERSION:
@@ -140,31 +151,42 @@ def load_training_checkpoint(model, optimizer, path, model_config, device):
     rank = torch.distributed.get_rank()
     saved_world_size = artifact.get("world_size")
     if saved_world_size == torch.distributed.get_world_size():
-        _restore_rng_state(artifact["rng_states"][rank])
+        states_by_rank = artifact.get("rng_states_by_rudder_rank")
+        if states_by_rank is not None and state_rank is not None:
+            _restore_rng_state(states_by_rank[int(state_rank)])
+        else:
+            _restore_rng_state(artifact["rng_states"][rank])
+            if rank == 0 and state_rank is not None:
+                print(
+                    "Warning: this checkpoint predates DGL-rank RNG mapping; "
+                    "restored RNG by PyTorch rank"
+                )
     elif rank == 0:
         print("Warning: world size changed; checkpoint RNG state was not restored")
     return artifact
 
 
-def runtime_checkpoint_path(model_checkpoint_path, rank):
-    return Path(model_checkpoint_path).with_name(f"runtime.rank-{rank:05d}.last")
+def runtime_checkpoint_path(model_checkpoint_path, state_rank):
+    return Path(model_checkpoint_path).with_name(f"runtime.rank-{state_rank:05d}.last")
 
 
 def save_runtime_checkpoint(prefetcher, pending_minibatch, model_checkpoint_path,
                             epoch, device):
     """Save each rank's Rudder state and its already-prefetched minibatch."""
-    destination = runtime_checkpoint_path(model_checkpoint_path, torch.distributed.get_rank())
+    state_rank = int(prefetcher.rank)
+    destination = runtime_checkpoint_path(model_checkpoint_path, state_rank)
     error = None
     try:
         _atomic_torch_save({
             "format_version": RUNTIME_FORMAT_VERSION,
             "epoch": epoch,
-            "rank": torch.distributed.get_rank(),
+            "rank": state_rank,
+            "distributed_rank": torch.distributed.get_rank(),
             "world_size": torch.distributed.get_world_size(),
             "runtime_state": prefetcher.runtime_state_dict(),
             "pending_minibatch": pending_minibatch,
         }, destination)
-        print(f"Rank {torch.distributed.get_rank()} Rudder checkpoint saved to: {destination.resolve()}")
+        print(f"DGL rank {state_rank} Rudder checkpoint saved to: {destination.resolve()}")
     except Exception as exc:
         error = exc
     _collective_error(error, device, "Rudder checkpoint save")
@@ -172,23 +194,47 @@ def save_runtime_checkpoint(prefetcher, pending_minibatch, model_checkpoint_path
 
 def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, device):
     """Restore this rank's Rudder state from the latest sidecar."""
-    rank = torch.distributed.get_rank()
-    source = runtime_checkpoint_path(model_checkpoint_path, rank)
+    state_rank = int(prefetcher.rank)
+    source = runtime_checkpoint_path(model_checkpoint_path, state_rank)
     error = None
     pending_minibatch = None
     try:
         artifact = torch.load(source, map_location="cpu", weights_only=True)
+    except Exception as exc:
+        error = exc
+    _collective_error(error, device, "Rudder checkpoint read")
+
+    error = None
+    try:
+        # All trainers exchange only the small rank/path descriptors. This
+        # migrates old checkpoints without every trainer loading every large
+        # runtime sidecar to discover its saved DGL rank.
+        descriptors = [None] * torch.distributed.get_world_size()
+        torch.distributed.all_gather_object(descriptors, {
+            "rank": artifact.get("rank"), "path": str(source)
+        })
+        matches = [item for item in descriptors if item["rank"] == state_rank]
+        if len(matches) != 1:
+            raise ValueError(
+                f"Expected one runtime checkpoint for DGL rank {state_rank}, "
+                f"found {len(matches)}"
+            )
+        matched_source = Path(matches[0]["path"])
+        if matched_source != source:
+            source = matched_source
+            artifact = torch.load(source, map_location="cpu", weights_only=True)
         if artifact.get("format_version") != RUNTIME_FORMAT_VERSION:
             raise ValueError(f"Unsupported Rudder checkpoint format in {source}")
         if artifact.get("epoch") != expected_epoch:
             raise ValueError(f"Rudder checkpoint epoch does not match model checkpoint: {source}")
-        if artifact.get("rank") != rank or artifact.get("world_size") != torch.distributed.get_world_size():
-            raise ValueError(f"Rudder checkpoint rank or world size does not match: {source}")
+        if (artifact.get("rank") != state_rank
+                or artifact.get("world_size") != torch.distributed.get_world_size()):
+            raise ValueError(f"Rudder checkpoint DGL rank or world size does not match: {source}")
         prefetcher.load_runtime_state_dict(artifact["runtime_state"])
         pending_minibatch = artifact.get("pending_minibatch")
         if pending_minibatch is None:
             raise ValueError(f"Rudder checkpoint has no pending minibatch: {source}")
-        print(f"Rank {rank} Rudder checkpoint restored from: {source.resolve()}")
+        print(f"DGL rank {state_rank} Rudder checkpoint restored from: {source.resolve()}")
     except Exception as exc:
         error = exc
     _collective_error(error, device, "Rudder checkpoint restore")

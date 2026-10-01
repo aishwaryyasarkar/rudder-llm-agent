@@ -318,7 +318,7 @@ class Trainer:
         if self.args.resume_checkpoint:
             checkpoint = load_training_checkpoint(
                 self.model, self.optimizer, self.args.resume_checkpoint,
-                self.model_config, self.device,
+                self.model_config, self.device, state_rank=self.g.rank(),
             )
             completed_epochs = checkpoint["epoch"]
             self.best_checkpoint_metric = checkpoint["best_validation_metric"]
@@ -539,7 +539,7 @@ class Trainer:
                         self.model, self.optimizer, self.checkpoint_path, epoch,
                         self.model_config, validation_metric=self.checkpoint_metric,
                         best_metric=self.best_checkpoint_metric, save_last=save_last,
-                        runtime_state_saved=runtime_saved,
+                        runtime_state_saved=runtime_saved, state_rank=self.g.rank(),
                     )
         if self.args.save_checkpoints and th.distributed.get_rank() == 0:
             print("Training complete. Checkpoints are in: "
