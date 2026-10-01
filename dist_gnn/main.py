@@ -291,6 +291,26 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size_eval", type=int, default=100000)
     parser.add_argument("--log_every", type=int, default=20)
     parser.add_argument("--eval_every", type=int, default=5)
+    parser.add_argument(
+        "--save_checkpoints", type=utils.str2bool, default=True,
+        help="Save model.last and model.best checkpoints.",
+    )
+    parser.add_argument(
+        "--checkpoint_every", type=int, default=1,
+        help="Save model.last every N epochs (and at the final epoch).",
+    )
+    parser.add_argument(
+        "--save_rudder_state", type=utils.str2bool, default=False,
+        help="Save per-rank Rudder buffer and decision context with model.last.",
+    )
+    parser.add_argument(
+        "--resume_checkpoint", type=str, default=None,
+        help="Path to a resumable model.last checkpoint.",
+    )
+    parser.add_argument(
+        "--resume_rudder_state", choices=("scratch", "restore"), default="scratch",
+        help="Start Rudder state fresh or restore its saved per-rank state.",
+    )
     parser.add_argument("--lr", type=float, default=0.003)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument(
@@ -370,6 +390,13 @@ if __name__ == "__main__":
     parser.add_argument("--num_heads", type=int, default=0, help="Number of attention heads")
     args = parser.parse_args()
 
+
+    if args.checkpoint_every <= 0:
+        raise ValueError("--checkpoint_every must be greater than 0.")
+    if args.save_rudder_state and not args.save_checkpoints:
+        raise ValueError("--save_rudder_state requires --save_checkpoints true.")
+    if args.resume_rudder_state == "restore" and not args.resume_checkpoint:
+        raise ValueError("--resume_rudder_state restore requires --resume_checkpoint.")
 
     if args.enable_finetune and args.decision_model not in CLASSIFIER_MODELS:
         raise ValueError("Finetuning is only supported for classifier models: mlp/tabnet/lr/rf/xgb/svm.")

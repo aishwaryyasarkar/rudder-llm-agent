@@ -8,6 +8,23 @@ from agents.local_agents import SharedStateStore, MetricsCollectionAgent, Contex
 from agents.classifiers import MLPEvictionClassifier, TabNetEvictionClassifier, LogisticRegressionEvictionClassifier, RandomForestEvictionClassifier, XGBoostEvictionClassifier, SVMEvictionClassifier
 import queue
 import threading
+import copy
+import hashlib
+
+
+def _checkpoint_value(value):
+    """Convert runtime values to types accepted by safe torch loading."""
+    if isinstance(value, np.ndarray):
+        return th.from_numpy(np.array(value, copy=True))
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {key: _checkpoint_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_checkpoint_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_checkpoint_value(item) for item in value)
+    return value
 
 class PrefetchBuffer:
     """
@@ -759,6 +776,105 @@ class PrefetchBuffer:
         # copy normal scores of the replaced nodes to the eviction scores as they are the new prefetch_ids
         self.eviction_score[eviction_candidates_idx] = normal_score
         return eviction_candidates_idx, replace_candidates, final_slots
+
+    def _runtime_signature(self):
+        """Describe the partition and buffer layout required by saved state."""
+        halo_bytes = np.ascontiguousarray(self.halo_nodes_rank, dtype=np.int64).tobytes()
+        return {
+            "graph_name": self.args.graph_name,
+            "num_nodes": self.graph.number_of_nodes(),
+            "rank": self.rank,
+            "num_partitions": self.graph.get_partition_book().num_partitions(),
+            "memory_efficient": self.memory_efficient,
+            "buffer_length": self.buffer_length,
+            "prefetch_fraction": self.fraction,
+            "prefetcher_init": self.prefetcher_init,
+            "eviction_period": self.period,
+            "alpha": self.alpha,
+            "decision_model": self.args.decision_model,
+            "halo_sha256": hashlib.sha256(halo_bytes).hexdigest(),
+        }
+
+    def runtime_state_dict(self):
+        """Return serializable per-rank Rudder state; worker objects are excluded."""
+        state = {
+            "signature": self._runtime_signature(),
+            "prefetch_ids": th.from_numpy(np.array(self.prefetch_ids, copy=True)),
+            "eviction_score": th.from_numpy(np.array(self.eviction_score, copy=True)),
+            "normal_score": th.from_numpy(np.array(self.normal_score, copy=True)),
+            "sorted": self.sorted,
+            "counter": self.counter,
+            "rpc_time": self.rpc_time,
+            "prefetch_compute_time": self.prefetch_compute_time,
+            "lookup_time": self.lookup_time,
+            "evict_time": self.evict_time,
+            "update_score_time": self.update_score_time,
+            "agent_decision_wait_time": self.agent_decision_wait_time,
+            "hit": self.hit,
+            "miss": self.miss,
+            "evict": self.evict,
+            "num_evicted_nodes": self.num_evicted_nodes,
+            "evicted_candidates": th.tensor(sorted(self.evicted_candidates), dtype=th.int64),
+            "donotevict_counter": self.donotevict_counter,
+            "disable_eviction": self.disable_eviction,
+            "eviction_candidate_frequency": self.eviction_candidate_frequency,
+            "evicted_refetch_count": self.evicted_refetch_count,
+            "decision": self.decision if hasattr(self, "decision") else None,
+        }
+        for name in ("num_remote_nodes_sampled", "num_remote_nodes_found"):
+            if hasattr(self, name):
+                state[name] = getattr(self, name)
+        if not self.collection_mode and not self.use_classifier:
+            state["llm_context"] = {
+                "aggregated_metrics": copy.deepcopy(self.shared_state_store.aggregated_metrics),
+                "history": copy.deepcopy(self.shared_state_store.history),
+                "metrics_buffer": copy.deepcopy(self.metrics_agent.buffer),
+                "pending_eviction": copy.deepcopy(self.context_agent.pending_eviction),
+                "eviction_history": copy.deepcopy(self.context_agent.eviction_history),
+                "stabilized_count": self.context_agent.stabilized_count,
+            }
+        return _checkpoint_value(state)
+
+    def load_runtime_state_dict(self, state):
+        """Restore a compatible per-rank Rudder state and rebuild cached features."""
+        expected = self._runtime_signature()
+        if state.get("signature") != expected:
+            raise ValueError("Rudder checkpoint does not match this graph, partition, or prefetch configuration")
+
+        self.prefetch_ids = state["prefetch_ids"].numpy().astype(np.int32, copy=True)
+        self.eviction_score = state["eviction_score"].numpy().astype(np.float32, copy=True)
+        self.normal_score = state["normal_score"].numpy().astype(np.float32, copy=True)
+        self.sorted = state["sorted"]
+        for name in (
+            "counter", "rpc_time", "prefetch_compute_time", "lookup_time", "evict_time",
+            "update_score_time", "agent_decision_wait_time", "hit", "miss", "evict",
+            "num_evicted_nodes", "donotevict_counter", "disable_eviction",
+            "eviction_candidate_frequency", "evicted_refetch_count", "decision",
+            "num_remote_nodes_sampled", "num_remote_nodes_found",
+        ):
+            if name in state:
+                setattr(self, name, state[name])
+        self.evicted_candidates = set(state["evicted_candidates"].tolist())
+
+        feature_width = self.graph.ndata["features"].shape[1]
+        self.prefetch_features = th.zeros(self.buffer_length, feature_width)
+        valid = (self.prefetch_ids >= 0) & (self.prefetch_ids < self.graph.number_of_nodes())
+        if np.any(valid):
+            self.prefetch_features[th.from_numpy(valid)] = self.graph.ndata["features"][self.prefetch_ids[valid]]
+        self.fetched_features = th.sparse_coo_tensor(
+            (self.graph.number_of_nodes(), feature_width), dtype=th.float32
+        )
+
+        llm_context = state.get("llm_context")
+        if llm_context is not None:
+            if self.collection_mode or self.use_classifier:
+                raise ValueError("Rudder checkpoint contains LLM context for a non-LLM run")
+            self.shared_state_store.aggregated_metrics = copy.deepcopy(llm_context["aggregated_metrics"])
+            self.shared_state_store.history = copy.deepcopy(llm_context["history"])
+            self.metrics_agent.buffer = copy.deepcopy(llm_context["metrics_buffer"])
+            self.context_agent.pending_eviction = copy.deepcopy(llm_context["pending_eviction"])
+            self.context_agent.eviction_history = copy.deepcopy(llm_context["eviction_history"])
+            self.context_agent.stabilized_count = llm_context["stabilized_count"]
 
     def close(self):
         """Release thread-pool resources used by this prefetcher."""

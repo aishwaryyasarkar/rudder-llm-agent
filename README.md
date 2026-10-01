@@ -236,6 +236,34 @@ bash set_params.sh --help
 - [`slurm/cpu.sh`](slurm/cpu.sh) / [`slurm/gpu.sh`](slurm/gpu.sh) build an `ip_config` file from allocated nodes.
 - Job time and log paths are set in [`slurm/submit.sh`](slurm/submit.sh) from dataset/model/node settings.
 
+### Checkpointing and resuming training
+
+Each job writes checkpoints under `<job_log_directory>/checkpoints/`:
+
+- `model.last` contains the latest scheduled model, optimizer, epoch, and random-number state. It is saved every `CHECKPOINT_EVERY` epochs and once at the final epoch.
+- `model.best` is updated whenever a scheduled validation reports a better global validation accuracy (or micro-F1 for multi-label data). It follows `--eval_every`, independently of `CHECKPOINT_EVERY`.
+- `runtime.rank-<rank>.last` files are written with `model.last` when `SAVE_RUDDER_STATE="true"`. They contain each rank's buffer state, metrics, and structured Ollama eviction context. Cached features are rebuilt from the graph during restore.
+
+Configure this behavior in [`slurm/example_config.sh`](slurm/example_config.sh):
+
+- `SAVE_CHECKPOINTS`: `true` saves `model.last` and `model.best`; `false` disables all checkpoint output.
+- `CHECKPOINT_EVERY`: positive number of epochs between `model.last` saves. This does not trigger validation or control `model.best`.
+- `SAVE_RUDDER_STATE`: saves the optional per-rank Rudder state with `model.last`. Leave this `false` to avoid its storage and I/O cost.
+- `RESUME_CHECKPOINT`: path to the `model.last` file to resume. Leave it empty for a new run.
+- `RESUME_RUDDER_STATE`: `scratch` restores model training state but creates new buffers and Ollama context; `restore` also loads the saved per-rank Rudder state.
+
+For a full resume, use:
+
+```bash
+SAVE_CHECKPOINTS="true"
+CHECKPOINT_EVERY="5"
+SAVE_RUDDER_STATE="true"
+RESUME_CHECKPOINT="/path/to/checkpoints/model.last"
+RESUME_RUDDER_STATE="restore"
+```
+
+`--num_epochs` is the total target epoch, rather than the number of additional epochs. Restoring Rudder state requires the same graph, partition layout, trainer count, and prefetch settings used to create it. If those do not match, the run stops with an error; select `scratch` to resume only the model and optimizer.
+
 ### Step 4 (Optional): Collect runtime samples to train the classifiers 
 
 If you prefer to use Rudder with ML Classifier backend instead of LLM agents, you need to generate training data and train the classifiers offline.

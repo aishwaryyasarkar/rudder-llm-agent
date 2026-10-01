@@ -77,6 +77,11 @@ OLLAMA_BIN=${OLLAMA_BIN:-${24}} # optional override for ollama executable
 OLLAMA_MODELS_DIR=${OLLAMA_MODELS_DIR:-${25}} # optional override for ollama models directory
 COLLECT_TRAINING_FOR_CLASSIFIER=${COLLECT_TRAINING_FOR_CLASSIFIER:-${26}} # whether to collect classifier-training data
 TRAINING_DATA_FILEPATH=${TRAINING_DATA_FILEPATH:-${27}} # optional output CSV path for collected training data
+SAVE_CHECKPOINTS=${SAVE_CHECKPOINTS:-${28:-true}}
+CHECKPOINT_EVERY=${CHECKPOINT_EVERY:-${29:-1}}
+SAVE_RUDDER_STATE=${SAVE_RUDDER_STATE:-${30:-false}}
+RESUME_CHECKPOINT=${RESUME_CHECKPOINT:-${31}}
+RESUME_RUDDER_STATE=${RESUME_RUDDER_STATE:-${32:-scratch}}
 
 # Validate that all required arguments are provided
 if [ -z "$MODE" ] || [ -z "$HIT_RATE" ] || [ -z "$MODEL" ] || [ -z "$FP" ] || [ -z "$DELTA" ] || [ -z "$ALPHAS" ] || [ -z "$DATASET_NAME" ] || [ -z "$NUM_NODES" ] || [ -z "$NUM_TRAINERS" ] || [ -z "$NUM_SAMPLER_PROCESSES" ] || [ -z "$QUEUE" ] || [ -z "$LOGS_DIR" ] || [ -z "$DATA_DIR" ] || [ -z "$PROJ_PATH" ] || [ -z "$PARTITION_DIR" ] || [ -z "$PARTITION_METHOD" ]; then
@@ -129,7 +134,9 @@ for n in $NUM_NODES; do
                             "$PROJ_PATH" "$NEW_PARTITION_DIR" "$PARTITION_METHOD" "$PREFETCHER_INIT" \
                             "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" \
                             "$ML_MODEL_DIR" "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" \
-                            "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH"
+                            "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH" \
+                            "$SAVE_CHECKPOINTS" "$CHECKPOINT_EVERY" "$SAVE_RUDDER_STATE" \
+                            "$RESUME_CHECKPOINT" "$RESUME_RUDDER_STATE"
                         done
                 done
             done
