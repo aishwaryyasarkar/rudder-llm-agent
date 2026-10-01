@@ -299,21 +299,3 @@ python classifier_models/lr/lr.py \
       url={https://arxiv.org/abs/2602.23556}, 
 }
 ```
-
-## GNN checkpoint saving
-
-Training saves `checkpoints/last.pt` inside the existing run log directory after
-every completed epoch. For example, `--summary_filepath /shared/run-001.txt`
-produces `/shared/run-001/checkpoints/last.pt`. No new CLI or SLURM options are
-required. Use a shared log directory if you want to access the checkpoint from
-other machines.
-
-Global rank zero writes the file atomically, replacing the previous epoch's
-checkpoint. It contains `model_state_dict`, `model_config`, `epoch`, and
-`format_version`. The model config records the architecture, task type, and graph
-name. Graph data, preprocessing, original class-ID mappings, and optimizer state
-are not included; preserve the corresponding dataset information separately.
-
-This change only saves checkpoints. It does not add inference-only execution,
-training resume, or best-checkpoint selection. Training, evaluation, models,
-partitioning, and launch settings otherwise retain their original behavior.
