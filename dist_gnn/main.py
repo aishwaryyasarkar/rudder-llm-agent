@@ -82,13 +82,13 @@ def main(args):
         val_nid = dgl.distributed.node_split(
             g.ndata["val_mask"],
             pb,
-            force_even=False,
+            force_even=True,
             node_trainer_ids=g.ndata["trainer_id"],
         )
         test_nid = dgl.distributed.node_split(
             g.ndata["test_mask"],
             pb,
-            force_even=False,
+            force_even=True,
             node_trainer_ids=g.ndata["trainer_id"],
         )
     else:
@@ -96,10 +96,10 @@ def main(args):
             g.ndata["train_mask"], pb, force_even=True
         )
         val_nid = dgl.distributed.node_split(
-            g.ndata["val_mask"], pb, force_even=False
+            g.ndata["val_mask"], pb, force_even=True
         )
         test_nid = dgl.distributed.node_split(
-            g.ndata["test_mask"], pb, force_even=False
+            g.ndata["test_mask"], pb, force_even=True
         )
     local_nid = pb.partid2nids(pb.partid).detach().numpy() # get local node ids
     num_train_local = len(np.intersect1d(train_nid.numpy(), local_nid)) 
