@@ -242,7 +242,7 @@ Each job writes checkpoints under `<job_log_directory>/checkpoints/`:
 
 - `model.last` contains the latest scheduled model, optimizer, epoch, and random-number state. It is saved every `CHECKPOINT_EVERY` epochs and once at the final epoch.
 - `model.best` is updated whenever a scheduled validation reports a better global validation accuracy (or micro-F1 for multi-label data). It follows `--eval_every`, independently of `CHECKPOINT_EVERY`.
-- `runtime.rank-<rank>.last` files are written with `model.last` when `SAVE_RUDDER_STATE="true"`. They contain each rank's buffer state, metrics, and structured Ollama eviction context. Cached features are rebuilt from the graph during restore.
+- `runtime.rank-<rank>.last` files are written with `model.last` when `SAVE_RUDDER_STATE="true"`. They contain each rank's buffer state, metrics, structured Ollama eviction context, and the pending prefetched minibatch. Cached buffer features are rebuilt from the graph during restore.
 
 Configure this behavior in [`slurm/example_config.sh`](slurm/example_config.sh):
 
@@ -262,7 +262,7 @@ RESUME_CHECKPOINT="/path/to/checkpoints/model.last"
 RESUME_RUDDER_STATE="restore"
 ```
 
-`--num_epochs` is the total target epoch, rather than the number of additional epochs. Restoring Rudder state requires the same graph, partition layout, trainer count, and prefetch settings used to create it. If those do not match, the run stops with an error; select `scratch` to resume only the model and optimizer. The asynchronous minibatch queue is recreated when the resumed job starts, so a resumed run is not expected to be bit-for-bit identical to an uninterrupted run.
+`--num_epochs` is the total target epoch, rather than the number of additional epochs. Restoring Rudder state requires the same graph, partition layout, trainer count, and prefetch settings used to create it. If those do not match, the run stops with an error; select `scratch` to resume only the model and optimizer. Full Rudder restore reloads the pending minibatch into the trainer queue, so the buffer state is not carried forward without the minibatch that produced it.
 
 ### Step 4 (Optional): Collect runtime samples to train the classifiers 
 

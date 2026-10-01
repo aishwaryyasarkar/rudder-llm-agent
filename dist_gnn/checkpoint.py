@@ -10,7 +10,7 @@ import torch
 
 
 FORMAT_VERSION = 2
-RUNTIME_FORMAT_VERSION = 1
+RUNTIME_FORMAT_VERSION = 2
 
 
 def _module(model):
@@ -150,8 +150,9 @@ def runtime_checkpoint_path(model_checkpoint_path, rank):
     return Path(model_checkpoint_path).with_name(f"runtime.rank-{rank:05d}.last")
 
 
-def save_runtime_checkpoint(prefetcher, model_checkpoint_path, epoch, device):
-    """Save each rank's local Rudder buffer and decision context."""
+def save_runtime_checkpoint(prefetcher, pending_minibatch, model_checkpoint_path,
+                            epoch, device):
+    """Save each rank's Rudder state and its already-prefetched minibatch."""
     destination = runtime_checkpoint_path(model_checkpoint_path, torch.distributed.get_rank())
     error = None
     try:
@@ -161,6 +162,7 @@ def save_runtime_checkpoint(prefetcher, model_checkpoint_path, epoch, device):
             "rank": torch.distributed.get_rank(),
             "world_size": torch.distributed.get_world_size(),
             "runtime_state": prefetcher.runtime_state_dict(),
+            "pending_minibatch": pending_minibatch,
         }, destination)
         print(f"Rank {torch.distributed.get_rank()} Rudder checkpoint saved to: {destination.resolve()}")
     except Exception as exc:
@@ -173,6 +175,7 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
     rank = torch.distributed.get_rank()
     source = runtime_checkpoint_path(model_checkpoint_path, rank)
     error = None
+    pending_minibatch = None
     try:
         artifact = torch.load(source, map_location="cpu", weights_only=True)
         if artifact.get("format_version") != RUNTIME_FORMAT_VERSION:
@@ -182,10 +185,14 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
         if artifact.get("rank") != rank or artifact.get("world_size") != torch.distributed.get_world_size():
             raise ValueError(f"Rudder checkpoint rank or world size does not match: {source}")
         prefetcher.load_runtime_state_dict(artifact["runtime_state"])
+        pending_minibatch = artifact.get("pending_minibatch")
+        if pending_minibatch is None:
+            raise ValueError(f"Rudder checkpoint has no pending minibatch: {source}")
         print(f"Rank {rank} Rudder checkpoint restored from: {source.resolve()}")
     except Exception as exc:
         error = exc
     _collective_error(error, device, "Rudder checkpoint restore")
+    return pending_minibatch
 
 
 def checkpoint_validation_score(predictions, labels, node_ids, multilabel, device, batch_size):

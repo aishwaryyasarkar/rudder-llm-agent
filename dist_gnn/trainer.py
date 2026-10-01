@@ -253,10 +253,68 @@ class Trainer:
             batch_inputs, t_rpc = self.prefetcher.prefetch_with_eviction(input_nodes_array, batch_inputs, epoch, step)
             self.next_batch_inputs.put(batch_inputs)
         return t_rpc
+
+    @staticmethod
+    def _peek_queue(item_queue, name):
+        """Copy the single prefetched item without consuming the live queue."""
+        with item_queue.mutex:
+            if len(item_queue.queue) != 1:
+                raise RuntimeError(
+                    f"Expected one pending {name} item, found {len(item_queue.queue)}"
+                )
+            return item_queue.queue[0]
+
+    @staticmethod
+    def _serialize_block(block):
+        src, dst = block.edges(order="eid")
+        return {
+            "src": src.cpu(),
+            "dst": dst.cpu(),
+            "num_src_nodes": block.num_src_nodes(),
+            "num_dst_nodes": block.num_dst_nodes(),
+            "srcdata": {key: value.cpu() for key, value in block.srcdata.items()},
+            "dstdata": {key: value.cpu() for key, value in block.dstdata.items()},
+            "edata": {key: value.cpu() for key, value in block.edata.items()},
+        }
+
+    @staticmethod
+    def _deserialize_block(state):
+        block = dgl.create_block(
+            (state["src"], state["dst"]),
+            num_src_nodes=state["num_src_nodes"],
+            num_dst_nodes=state["num_dst_nodes"],
+        )
+        for key, value in state["srcdata"].items():
+            block.srcdata[key] = value
+        for key, value in state["dstdata"].items():
+            block.dstdata[key] = value
+        for key, value in state["edata"].items():
+            block.edata[key] = value
+        return block
+
+    def _pending_minibatch_state(self):
+        """Serialize the minibatch that overlaps the end of the current epoch."""
+        blocks = self._peek_queue(self.next_batch_blocks, "blocks")
+        return {
+            "inputs": self._peek_queue(self.next_batch_inputs, "inputs").cpu(),
+            "labels": self._peek_queue(self.next_batch_labels, "labels").cpu(),
+            "blocks": [self._serialize_block(block) for block in blocks],
+            "rpc": float(self._peek_queue(self.next_batch_rpc, "RPC timing")),
+        }
+
+    def _restore_pending_minibatch(self, state):
+        """Put a saved prefetched minibatch back into the trainer queues."""
+        self.next_batch_inputs.put(state["inputs"])
+        self.next_batch_labels.put(state["labels"])
+        self.next_batch_blocks.put([
+            self._deserialize_block(block) for block in state["blocks"]
+        ])
+        self.next_batch_rpc.put(state["rpc"])
               
     def run(self):
         self.model = self.model.to(self.device)
         completed_epochs = 0
+        restored_pending_minibatch = False
         if self.args.resume_checkpoint:
             checkpoint = load_training_checkpoint(
                 self.model, self.optimizer, self.args.resume_checkpoint,
@@ -275,10 +333,12 @@ class Trainer:
                         "This checkpoint has no Rudder state; use "
                         "--resume_rudder_state scratch or resume another model.last."
                     )
-                load_runtime_checkpoint(
+                pending_minibatch = load_runtime_checkpoint(
                     self.prefetcher, self.args.resume_checkpoint,
                     completed_epochs, self.device,
                 )
+                self._restore_pending_minibatch(pending_minibatch)
+                restored_pending_minibatch = True
             else:
                 # Preserve global minibatch numbering for a fresh Rudder state.
                 self.prefetcher.counter = completed_epochs * self.num_mini_batches
@@ -333,7 +393,8 @@ class Trainer:
                 while step < self.num_mini_batches:
                     tic_step = time.time()
                     future = None
-                    if step == 0 and epoch == first_epoch_of_run:
+                    if (step == 0 and epoch == first_epoch_of_run
+                            and not restored_pending_minibatch):
                         # Bootstrap the pipeline at startup or after a resume.
                         batch_inputs, batch_labels, blocks, sync_sample_time, t_rpc = self._get_first_minibatch(dataloader_iter, epoch, step)
                         if epoch == first_epoch_of_run:
@@ -465,7 +526,8 @@ class Trainer:
                 runtime_saved = save_last and self.args.save_rudder_state
                 if runtime_saved:
                     save_runtime_checkpoint(
-                        self.prefetcher, self.checkpoint_path, epoch, self.device
+                        self.prefetcher, self._pending_minibatch_state(),
+                        self.checkpoint_path, epoch, self.device
                     )
                 improved = (
                     self.checkpoint_metric is not None
