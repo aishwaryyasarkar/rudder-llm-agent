@@ -7,10 +7,9 @@ import tqdm
 
 class GAT(nn.Module):
     def __init__(
-        self, in_feats, n_hidden, n_classes, n_layers, num_heads, activation, multilabel=False
+        self, in_feats, n_hidden, n_classes, n_layers, num_heads, activation
     ):
         super().__init__()
-        self.multilabel = multilabel
         self.n_layers = n_layers
         self.n_hidden = n_hidden
         self.n_classes = n_classes
@@ -56,7 +55,7 @@ class GAT(nn.Module):
             else:
                 h = layer(block, (h, h_dst))
         h = h.mean(1)
-        return h if self.multilabel else h.log_softmax(dim=-1)
+        return h.log_softmax(dim=-1)
 
     def inference(self, g, x, num_heads, device, batch_size):
         """
@@ -119,8 +118,7 @@ class GAT(nn.Module):
                     # The final layer
                     h = layer(block, (h, h_dst))
                     h = h.mean(1)
-                    if not self.multilabel:
-                        h = h.log_softmax(dim=-1)
+                    h = h.log_softmax(dim=-1)
 
                 # Copy back to CPU as DistTensor requires data reside on CPU.
                 y[output_nodes] = h.cpu()

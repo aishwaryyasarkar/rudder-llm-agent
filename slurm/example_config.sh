@@ -44,12 +44,3 @@ OLLAMA_MODELS_DIR=""
 COLLECT_TRAINING_FOR_CLASSIFIER="false"
 # Optional output CSV path (per-rank suffix is added automatically).
 TRAINING_DATA_FILEPATH=""
-
-# GNN checkpoints and later inference (MODE above still selects cpu/gpu).
-RUN_MODE="train"                  # train | infer
-CHECKPOINT_DIR=""                 # empty: <summary stem>/checkpoints; one directory per training job
-CHECKPOINT_PATH=""                # infer: shared path to last.pt or best.pt
-OUTPUT_DIR=""                     # infer: new shared directory; must not already exist
-SAVE_SCORES="false"               # include class probabilities in output shards
-BATCH_SIZE_EVAL="100000"           # decrease to reduce inference/export memory
-PREDICTION_THRESHOLD="0.5"        # multi-label probability threshold

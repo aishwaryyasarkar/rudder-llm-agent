@@ -9,6 +9,7 @@ import dgl.distributed
 import numpy as np
 import torch as th
 import utils
+from trainer import Trainer
 import datetime
 from agents import start_ollama
 import signal
@@ -55,20 +56,6 @@ def main(args):
     g = dgl.distributed.DistGraph(args.graph_name, part_config=args.part_config)
     print("Graph Obj g.ndata:", g.ndata)
 
-    if args.num_gpus == 0:
-        device = th.device("cpu")
-    else:
-        device = th.device("cuda", local_rank % args.num_gpus)
-        th.cuda.set_device(device)
-    if args.run_mode == "infer":
-        from dist_gnn.inference import run_inference
-        try:
-            run_inference(args, g, device)
-        finally:
-            th.distributed.destroy_process_group()
-        return
-
-    from trainer import Trainer
     # Split train/val/test IDs for each trainer.
     pb = g.get_partition_book()
     print(f"Partition book metadata of {host_name}", pb.metadata())
@@ -112,7 +99,13 @@ def main(args):
     )
 
     del local_nid
-    args.class_ids = None
+    if args.num_gpus == 0:
+        device = th.device("cpu")
+        print("Using CPU.")
+    else:
+        dev_id = g.rank() % args.num_gpus
+        device = th.device("cuda:" + str(dev_id))
+        print(f"Using GPU {dev_id}.")
     n_classes = args.n_classes
     if n_classes == 0:
         if args.graph_name == "yelp":
@@ -127,7 +120,6 @@ def main(args):
                 # Get a sorted list of the unique valid labels
                 unique_labels = th.unique(valid_labels).tolist()
                 # Create a mapping: old community label --> new contiguous label (starting at 0)
-                args.class_ids = sorted(unique_labels)
                 label_mapping = {old_label: new_label for new_label, old_label in enumerate(sorted(unique_labels))}
                 # Remap the labels while leaving -1 untouched (so they can be ignored in loss calculation)
                 new_labels = labels.clone()
@@ -144,9 +136,6 @@ def main(args):
     data = train_nid, val_nid, test_nid, in_feats, n_classes, g
 
     logdir = args.summary_filepath.replace(".txt", "")
-    if args.checkpoint_dir is None:
-        args.checkpoint_dir = os.path.join(logdir, "checkpoints")
-    print(f"GNN checkpoints: {args.checkpoint_dir}")
     os.makedirs(logdir, exist_ok=True) 
 
     if args.collect_training_for_classifier:
@@ -265,7 +254,7 @@ def main(args):
     except Exception as e:
         print(f"Error during training: {e}")
         traceback.print_exc()  # Print full stack trace
-        raise
+        cleanup_and_exit()
     finally:
         # Ensure Ollama server is always stopped at the end
         cleanup_and_exit()
@@ -305,7 +294,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.003)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument(
-        "--local-rank", "--local_rank", type=int, default=int(os.environ.get("LOCAL_RANK", 0)), help="get rank of the process"
+        "--local-rank", type=int, help="get rank of the process"
     )
     parser.add_argument(
         "--pad-data",
@@ -379,30 +368,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--eviction", type=utils.str2bool, default=True, help="Enable or disable eviction. Accepts: True or False")
     parser.add_argument("--num_heads", type=int, default=0, help="Number of attention heads")
-    parser.add_argument("--run_mode", choices=["train", "infer"], default="train")
-    parser.add_argument("--checkpoint_dir", help="Training output; defaults to <summary stem>/checkpoints")
-    parser.add_argument("--checkpoint_path", help="GNN checkpoint to load for inference")
-    parser.add_argument("--output_dir", help="New directory for prediction shards")
-    parser.add_argument("--save_scores", type=utils.str2bool, default=False)
-    parser.add_argument("--prediction_threshold", type=float, default=0.5)
     args = parser.parse_args()
-    if args.batch_size_eval <= 0:
-        parser.error("--batch_size_eval must be positive")
-    if not 0 <= args.prediction_threshold <= 1:
-        parser.error("--prediction_threshold must be between zero and one")
-    if args.run_mode == "infer":
-        if not args.checkpoint_path or not args.output_dir:
-            parser.error("Inference requires --checkpoint_path and --output_dir")
-        main(args)
-        sys.exit(0)
-    if args.checkpoint_path:
-        parser.error("--checkpoint_path is for inference; training resume is not supported")
-    if not args.summary_filepath:
-        parser.error("Training requires --summary_filepath")
-    if args.num_epochs <= 0 or args.eval_every <= 0:
-        parser.error("--num_epochs and --eval_every must be positive")
-    if args.num_layers < 2 or len(args.fan_out.split(",")) != args.num_layers:
-        parser.error("Use at least two layers and one --fan_out entry per layer")
 
 
     if args.enable_finetune and args.decision_model not in CLASSIFIER_MODELS:

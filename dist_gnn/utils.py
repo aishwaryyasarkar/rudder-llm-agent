@@ -1,4 +1,3 @@
-import argparse
 import torch as th
 import dgl
 import os

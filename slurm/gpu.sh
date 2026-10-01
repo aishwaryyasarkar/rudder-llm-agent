@@ -33,34 +33,9 @@ OLLAMA_MODELS_DIR=${24} # optional override for ollama models directory
 COLLECT_TRAINING_FOR_CLASSIFIER=${25} # whether to collect classifier-training data
 TRAINING_DATA_FILEPATH=${26} # optional output CSV path for collected training data
 TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
-RUN_MODE=${27:-train}
-CHECKPOINT_DIR=${28:-}
-CHECKPOINT_PATH=${29:-}
-OUTPUT_DIR=${30:-}
-SAVE_SCORES=${31:-false}
-BATCH_SIZE_EVAL=${32:-100000}
-PREDICTION_THRESHOLD=${33:-0.5}
-
 JOBID=$SLURM_JOB_ID
 
-# launch.py executes the command remotely through a shell. Quote each new value.
 OPTIONAL_MAIN_ARGS=""
-append_main_arg() {
-    local quoted
-    printf -v quoted '%q' "$2"
-    OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS $1 $quoted"
-}
-append_main_arg --run_mode "$RUN_MODE"
-append_main_arg --save_scores "$SAVE_SCORES"
-append_main_arg --batch_size_eval "$BATCH_SIZE_EVAL"
-append_main_arg --prediction_threshold "$PREDICTION_THRESHOLD"
-[ -z "$CHECKPOINT_DIR" ] || append_main_arg --checkpoint_dir "$CHECKPOINT_DIR"
-[ -z "$CHECKPOINT_PATH" ] || append_main_arg --checkpoint_path "$CHECKPOINT_PATH"
-[ -z "$OUTPUT_DIR" ] || append_main_arg --output_dir "$OUTPUT_DIR"
-if [ "$RUN_MODE" = "infer" ] && { [ -z "$CHECKPOINT_PATH" ] || [ -z "$OUTPUT_DIR" ]; }; then
-    echo "Inference requires CHECKPOINT_PATH and OUTPUT_DIR" >&2
-    exit 1
-fi
 if [ -n "$OLLAMA_BIN" ]; then
     OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --ollama_bin $OLLAMA_BIN"
 fi

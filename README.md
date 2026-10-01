@@ -300,115 +300,20 @@ python classifier_models/lr/lr.py \
 }
 ```
 
-## Save a GNN and run inference later
+## GNN checkpoint saving
 
-Training now writes GNN checkpoints after every completed epoch:
+Training saves `checkpoints/last.pt` inside the existing run log directory after
+every completed epoch. For example, `--summary_filepath /shared/run-001.txt`
+produces `/shared/run-001/checkpoints/last.pt`. No new CLI or SLURM options are
+required. Use a shared log directory if you want to access the checkpoint from
+other machines.
 
-- `last.pt`: the most recently completed epoch, including epochs without evaluation.
-- `best.pt`: the highest **global validation** accuracy (single-label) or micro-F1
-  (multi-label), updated only on evaluation epochs. Ties retain the earlier model.
+Global rank zero writes the file atomically, replacing the previous epoch's
+checkpoint. It contains `model_state_dict`, `model_config`, `epoch`, and
+`format_version`. The model config records the architecture, task type, and graph
+name. Graph data, preprocessing, original class-ID mappings, and optimizer state
+are not included; preserve the corresponding dataset information separately.
 
-By default these live in `<summary_filepath without .txt>/checkpoints/`. Set
-`--checkpoint_dir` to override this. Use a separate shared directory per training
-job, including each experiment in a parameter sweep. Global rank zero writes each
-file atomically. A checkpoint contains weights, architecture, class mapping, task
-metadata, epoch, and validation statistics. It does not include graph data or
-optimizer state; restarting training from a checkpoint is not supported.
-
-### SLURM workflow
-
-Keep your existing dataset, partition, allocation, and training settings in
-`slurm/example_config.sh`. First train with:
-
-```bash
-RUN_MODE="train"
-CHECKPOINT_DIR="/shared/rudder/run-001/checkpoints"
-```
-
-Submit with `cd slurm && bash set_params.sh --config example_config.sh`. Once the
-training job completes, change these fields and submit a new job:
-
-```bash
-RUN_MODE="infer"
-CHECKPOINT_PATH="/shared/rudder/run-001/checkpoints/best.pt"
-OUTPUT_DIR="/shared/rudder/run-001/predictions"
-SAVE_SCORES="true"
-BATCH_SIZE_EVAL="4096"
-```
-
-`OUTPUT_DIR` must be a new directory on shared storage. Choose one configuration
-per inference submission rather than a parameter sweep. `MODE="cpu"` or
-`MODE="gpu"` still selects hardware. Architecture is read from the checkpoint;
-training architecture flags do not override it during inference.
-
-### Direct launcher workflow
-
-Continue using `launch.py` to start DistDGL servers and workers. For example,
-from the repository root, with an existing partition config and IP file:
-
-```bash
-python launch.py --workspace "$PWD" \
-  --num_trainers 1 --num_samplers 0 --num_servers 1 \
-  --part_config /shared/partitions/ogbn-arxiv.json \
-  --ip_config /shared/ip_config.txt \
-  "python dist_gnn/main.py --run_mode infer --graph_name ogbn-arxiv \
-   --ip_config /shared/ip_config.txt --backend gloo --num_gpus 0 \
-   --checkpoint_path /shared/rudder/run-001/checkpoints/best.pt \
-   --output_dir /shared/rudder/run-001/predictions --batch_size_eval 4096 \
-   --save_scores true"
-```
-
-Inference runs full-neighbor, layer-by-layer computation on the same graph. It
-needs the graph topology and the same feature columns/preprocessing used for
-training. It checks graph name and feature width, but cannot detect changed feature
-semantics or a different graph stored under the same name. Preserve your graph
-partitions alongside the checkpoint. Labels and split masks are optional. No
-optimizer, prefetch buffer, decision classifier, or Ollama server is initialized.
-The existing DistDGL launch infrastructure is still required even on a single host.
-
-### Prediction output
-
-A completed run has `manifest.json`, one rank manifest per worker, and bounded-size
-`rank-XXXXX-XXXXX.pt` shards. Each shard contains:
-
-- `node_ids`: original dataset IDs when available, otherwise partition IDs.
-- `partition_node_ids`: IDs in the current partitioned graph.
-- `predictions`: class IDs, or a `[nodes, classes]` multi-label indicator matrix.
-- `probabilities`: optional `[nodes, classes]` scores when `--save_scores true`.
-
-The manifest records ID space, model configuration, checkpoint epoch, and shard
-manifests. Single-label class mappings are applied to predictions; probability
-columns follow the checkpoint's `class_ids` order (or `0..n_classes-1` when absent).
-Multi-label output uses sigmoid with `--prediction_threshold` (default `0.5`).
-New partitions created by `partition/partition_graph.py` preserve an
-`original_node_id` feature. Existing partitions without it remain usable, but
-output is explicitly marked `partition`; original IDs cannot be recovered from
-weights. Repartition the original dataset to preserve those IDs.
-
-```python
-import torch
-shard = torch.load("/shared/rudder/run-001/predictions/rank-00000-00000.pt",
-                   map_location="cpu", weights_only=True)
-print(shard["node_ids"], shard["predictions"])
-```
-
-For multi-label GAT, training and inference now both return independent class
-logits before sigmoid/BCE. Single-label GAT retains log-softmax output.
-
-### Tests and cluster smoke check
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-Checkpoint persistence, metrics, prediction export, and mocked SLURM launch paths
-are tested without DGL. The GNN round-trip test additionally requires DGL and
-checks GraphSAGE/GAT after an optimizer step for both task types.
-
-On your cluster, run a short training job for each model, check `last.pt` and
-`best.pt`, then submit inference with `last.pt` using the same partitions. Confirm
-that `manifest.json` exists, exported IDs cover every node exactly once, and the
-exported validation predictions reproduce the final validation metric. Repeat
-with two workers and with CPU/GPU as available. Use a graph without labels/masks
-to check inference-only deployment. Local unit tests do not replace this DistDGL
-integration check.
+This change only saves checkpoints. It does not add inference-only execution,
+training resume, or best-checkpoint selection. Training, evaluation, models,
+partitioning, and launch settings otherwise retain their original behavior.

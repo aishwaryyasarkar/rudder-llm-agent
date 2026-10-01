@@ -78,14 +78,6 @@ OLLAMA_MODELS_DIR=${OLLAMA_MODELS_DIR:-${25}} # optional override for ollama mod
 COLLECT_TRAINING_FOR_CLASSIFIER=${COLLECT_TRAINING_FOR_CLASSIFIER:-${26}} # whether to collect classifier-training data
 TRAINING_DATA_FILEPATH=${TRAINING_DATA_FILEPATH:-${27}} # optional output CSV path for collected training data
 
-RUN_MODE=${RUN_MODE:-${28:-train}}
-CHECKPOINT_DIR=${CHECKPOINT_DIR:-${29:-}}
-CHECKPOINT_PATH=${CHECKPOINT_PATH:-${30:-}}
-OUTPUT_DIR=${OUTPUT_DIR:-${31:-}}
-SAVE_SCORES=${SAVE_SCORES:-${32:-false}}
-BATCH_SIZE_EVAL=${BATCH_SIZE_EVAL:-${33:-100000}}
-PREDICTION_THRESHOLD=${PREDICTION_THRESHOLD:-${34:-0.5}}
-
 # Validate that all required arguments are provided
 if [ -z "$MODE" ] || [ -z "$HIT_RATE" ] || [ -z "$MODEL" ] || [ -z "$FP" ] || [ -z "$DELTA" ] || [ -z "$ALPHAS" ] || [ -z "$DATASET_NAME" ] || [ -z "$NUM_NODES" ] || [ -z "$NUM_TRAINERS" ] || [ -z "$NUM_SAMPLER_PROCESSES" ] || [ -z "$QUEUE" ] || [ -z "$LOGS_DIR" ] || [ -z "$DATA_DIR" ] || [ -z "$PROJ_PATH" ] || [ -z "$PARTITION_DIR" ] || [ -z "$PARTITION_METHOD" ]; then
     echo "Error: One or more required arguments are missing."
@@ -137,8 +129,7 @@ for n in $NUM_NODES; do
                             "$PROJ_PATH" "$NEW_PARTITION_DIR" "$PARTITION_METHOD" "$PREFETCHER_INIT" \
                             "$DECISION_MODEL" "$bs" "$BATCHSIZE_EXP" "$ENABLE_FINETUNE" "$finetune_interval" \
                             "$ML_MODEL_DIR" "$OLLAMA_BIN" "$OLLAMA_MODELS_DIR" \
-                            "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH" \
-                            "$RUN_MODE" "$CHECKPOINT_DIR" "$CHECKPOINT_PATH" "$OUTPUT_DIR" "$SAVE_SCORES" "$BATCH_SIZE_EVAL" "$PREDICTION_THRESHOLD"
+                            "$COLLECT_TRAINING_FOR_CLASSIFIER" "$TRAINING_DATA_FILEPATH"
                         done
                 done
             done
