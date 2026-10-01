@@ -33,7 +33,7 @@ def save_checkpoint(model, path, epoch, model_config, validation_metric=None,
             }
             destinations = [path]
             if improved:
-                destinations.append(path.with_name('best.pt'))
+                destinations.append(path.with_name('model.best'))
             for destination in destinations:
                 fd, temporary = tempfile.mkstemp(prefix=f'.{destination.name}.', dir=path.parent)
                 os.close(fd)

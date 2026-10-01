@@ -23,7 +23,7 @@ class Trainer:
     def __init__(self, args, device, data, halo_nodes, ollama_port, local_rank, logdir):
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.args = args
-        self.checkpoint_path = os.path.join(logdir, "checkpoints", "last.pt")
+        self.checkpoint_path = os.path.join(logdir, "checkpoints", "model.last")
         self.best_checkpoint_metric = float("-inf")
         self.checkpoint_metric = None
         self.device = device
