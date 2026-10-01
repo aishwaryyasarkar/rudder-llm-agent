@@ -17,11 +17,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collect_samples.collector import TrainingSampleCollector
+from dist_gnn.checkpoint import save_checkpoint, checkpoint_validation_score
 
 class Trainer:
     def __init__(self, args, device, data, halo_nodes, ollama_port, local_rank, logdir):
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.args = args
+        self.checkpoint_path = os.path.join(logdir, "checkpoints", "model.last")
+        self.best_checkpoint_metric = float("-inf")
+        self.checkpoint_metric = None
         self.device = device
         self.data = data
         self.halo_nodes = halo_nodes
@@ -162,6 +166,9 @@ class Trainer:
                 pred = self.model.module.inference(self.g, self.g.ndata["features"], self.args.batch_size_eval, self.device)
             elif self.args.model == "gat":
                 pred = self.model.module.inference(self.g, self.g.ndata["features"], self.args.num_heads, self.device, self.args.batch_size_eval)
+        self.checkpoint_metric = checkpoint_validation_score(
+            pred, self.g.ndata["labels"], self.val_nid, self.is_multilabel,
+            self.device, self.args.batch_size_eval)
         self.model.module.train()
         if self.is_multilabel:
             val_f1  = self._multilabel_f1(pred[self.val_nid],  self.g.ndata["labels"][self.val_nid].float())
@@ -393,6 +400,7 @@ class Trainer:
             sample_time_list.append(sample_time)
             wait_for_thread.append(wait_for_thread_time)
 
+            self.checkpoint_metric = None
             if epoch % self.args.eval_every == 0 or epoch == self.args.num_epochs:
                 start = time.time()
                 val_acc, test_acc = self.evaluate()
@@ -401,6 +409,19 @@ class Trainer:
                     f"Test Acc {test_acc:.4f}, time: {time.time() - start:.4f}"
                 )
                 eval_time.append(time.time() - start)
+            self.best_checkpoint_metric = save_checkpoint(self.model, self.checkpoint_path, epoch, {
+                "model": self.args.model, "in_feats": self.in_feats,
+                "n_classes": self.n_classes, "num_hidden": self.args.num_hidden,
+                "num_layers": self.args.num_layers, "num_heads": self.args.num_heads,
+                "dropout": self.args.dropout, "is_multilabel": self.is_multilabel,
+                "graph_name": self.args.graph_name,
+            }, validation_metric=self.checkpoint_metric, best_metric=self.best_checkpoint_metric)
+        if th.distributed.get_rank() == 0:
+            print(f"Latest model checkpoint saved to: {os.path.abspath(self.checkpoint_path)}")
+            print(
+                "Best model checkpoint saved to: "
+                f"{os.path.abspath(os.path.join(os.path.dirname(self.checkpoint_path), 'model.best'))}"
+            )
         print("Total time prefetch was called: ", self.prefetcher.counter)
         self.prefetcher.close() 
         
