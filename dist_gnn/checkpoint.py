@@ -40,6 +40,8 @@ def save_checkpoint(model, path, epoch, model_config, validation_metric=None,
                 torch.save(artifact, temporary)
                 os.replace(temporary, destination)
                 temporary = None
+                if destination.name == 'model.best':
+                    print(f'Best model checkpoint saved to: {destination.resolve()}')
         except Exception as exc:
             error = exc
         finally:

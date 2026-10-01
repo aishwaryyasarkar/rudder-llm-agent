@@ -416,6 +416,12 @@ class Trainer:
                 "dropout": self.args.dropout, "is_multilabel": self.is_multilabel,
                 "graph_name": self.args.graph_name,
             }, validation_metric=self.checkpoint_metric, best_metric=self.best_checkpoint_metric)
+        if th.distributed.get_rank() == 0:
+            print(f"Latest model checkpoint saved to: {os.path.abspath(self.checkpoint_path)}")
+            print(
+                "Best model checkpoint saved to: "
+                f"{os.path.abspath(os.path.join(os.path.dirname(self.checkpoint_path), 'model.best'))}"
+            )
         print("Total time prefetch was called: ", self.prefetcher.counter)
         self.prefetcher.close() 
         
