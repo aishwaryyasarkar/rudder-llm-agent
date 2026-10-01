@@ -262,7 +262,7 @@ RESUME_CHECKPOINT="/path/to/checkpoints/model.last"
 RESUME_RUDDER_STATE="restore"
 ```
 
-`--num_epochs` is the total target epoch, rather than the number of additional epochs. Restoring Rudder state requires the same graph, partition layout, trainer count, and prefetch settings used to create it. If those do not match, the run stops with an error; select `scratch` to resume only the model and optimizer.
+`--num_epochs` is the total target epoch, rather than the number of additional epochs. Restoring Rudder state requires the same graph, partition layout, trainer count, and prefetch settings used to create it. If those do not match, the run stops with an error; select `scratch` to resume only the model and optimizer. The asynchronous minibatch queue is recreated when the resumed job starts, so a resumed run is not expected to be bit-for-bit identical to an uninterrupted run.
 
 ### Step 4 (Optional): Collect runtime samples to train the classifiers 
 

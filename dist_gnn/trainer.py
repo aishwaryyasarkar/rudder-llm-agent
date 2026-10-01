@@ -308,13 +308,8 @@ class Trainer:
         test_acc = 0.0
         first_minibatch_sample_time = 0.0
         dataloader_iter = self.dataloader.__iter__()
-        first_batch_required = True
         # set the number of threads for pytorch
         for epoch in range(first_epoch_of_run, self.args.num_epochs + 1):
-            checkpoint_boundary = (
-                self.args.save_checkpoints
-                and (epoch % self.args.checkpoint_every == 0 or epoch == self.args.num_epochs)
-            )
             tic = time.time()
             # Various time statistics.
             sample_time = 0
@@ -338,8 +333,8 @@ class Trainer:
                 while step < self.num_mini_batches:
                     tic_step = time.time()
                     future = None
-                    if step == 0 and first_batch_required:
-                        # First minibatch after startup, resume, or a checkpoint boundary.
+                    if step == 0 and epoch == first_epoch_of_run:
+                        # Bootstrap the pipeline at startup or after a resume.
                         batch_inputs, batch_labels, blocks, sync_sample_time, t_rpc = self._get_first_minibatch(dataloader_iter, epoch, step)
                         if epoch == first_epoch_of_run:
                             first_minibatch_sample_time = sync_sample_time
@@ -356,10 +351,9 @@ class Trainer:
                         # if last step, reset the dataloader for the next epoch
                         dataloader_iter = self.dataloader.__iter__()
                     submit_task_start = time.time()
-                    if step < self.num_mini_batches - 1 or not checkpoint_boundary:
-                        future = self.executor.submit(
-                            self._next_minibatch, dataloader_iter, self.g, epoch, step
-                        )
+                    future = self.executor.submit(
+                        self._next_minibatch, dataloader_iter, self.g, epoch, step
+                    )
                     submit_task_time = time.time() - submit_task_start
                     num_seeds += len(blocks[-1].dstdata[dgl.NID])
                     num_inputs += len(blocks[0].srcdata[dgl.NID])
@@ -437,7 +431,6 @@ class Trainer:
                         self.recorder.record(**record)
                         self.prefetcher.reset_eviction_tracker()
                     step += 1
-            first_batch_required = checkpoint_boundary
             toc = time.time()
             # print(
             #     f"Part {self.g.rank()}, epoch: {epoch}, Epoch Time(s): {toc - tic:.4f}, "
