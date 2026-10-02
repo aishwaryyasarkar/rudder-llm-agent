@@ -186,14 +186,16 @@ def main(args):
         print(f"Rank {g.rank()} Trainer and Prefetcher Initialized.")
         
         # Train and evaluate
-        (epoch_time, test_acc, forward_time, backward_time, update_time, sample_time, eval_time, 
+        (epoch_time, test_acc, best_val_acc, best_test_acc,
+        forward_time, backward_time, update_time, sample_time, eval_time,
         hit_rate, miss_rate, alpha, period, threshold, absolute_total_time,
         prefetch_time) = trainer.run()
 
         print(
         f"Summary of node classification(GraphSAGE): GraphName "
         f"{args.graph_name} | TrainEpochTime(mean) {epoch_time:.4f} "
-        f"| TestAccuracy {test_acc:.4f} | ForwardTime {forward_time:.4f}"
+        f"| TestAccuracy {test_acc:.4f} | BestModelValidationAccuracy {best_val_acc:.4f} "
+        f"| BestModelTestAccuracy {best_test_acc:.4f} | ForwardTime {forward_time:.4f}"
         f"| BackwardTime {backward_time:.4f} | UpdateTime {update_time:.4f}"
         f" | SampleTime {sample_time:.4f} | EvalTime {eval_time:.4f}"
         )
@@ -206,6 +208,7 @@ def main(args):
         sample_time_tensor = utils.calculate_mean(sample_time, device)
         eval_time_tensor = utils.calculate_mean(eval_time, device)
         test_acc_tensor = utils.calculate_mean(test_acc, device) 
+        best_test_acc_tensor = utils.calculate_mean(best_test_acc, device)
         total_epoch_time_tensor = utils.sum(absolute_total_time['epoch_time'], device)
 
         # Write individual rank's total epoch time to args.summary_filepath
@@ -214,6 +217,8 @@ def main(args):
                 "\n"
                 f"Rank {g.rank()} | TotalEpochTime {absolute_total_time['epoch_time']:.4f}s"
                 f"| HitRate {hit_rate:.4f} | MissRate {miss_rate:.4f}"
+                f"| BestModelValidationAccuracy {best_val_acc:.4f}"
+                f"| BestModelTestAccuracy {best_test_acc:.4f}"
                 f"| ForwardTime {absolute_total_time['forward_time']:.4f}s"
                 f"| BackwardTime {absolute_total_time['backward_time']:.4f}s"
                 f"| UpdateTime {absolute_total_time['update_time']:.4f}s"
@@ -237,6 +242,11 @@ def main(args):
             print("Average sample time across processes: {:.4f} seconds".format(sample_time_tensor))
             print("Average eval time across processes: {:.4f} seconds".format(eval_time_tensor))
             print("Average test accuracy across processes: {:.4f}".format(test_acc_tensor))
+            print(
+                "Best model validation accuracy: {:.4f}; corresponding average test accuracy: {:.4f}".format(
+                    best_val_acc, best_test_acc_tensor
+                )
+            )
             
             # write the summary to a args.summary_filepath
             with open(args.summary_filepath, "a") as f:
@@ -246,7 +256,8 @@ def main(args):
                     "\n"
                     f"Summary of node classification({args.model}): GraphName, prefetch_fraction: {args.prefetch_fraction}, "
                     f"{args.graph_name} | TrainEpochTime(mean) {epoch_time_tensor:.4f} | TotalEpochTime {total_epoch_time_tensor:.4f}"
-                    f"| TestAccuracy {test_acc_tensor:.4f} | ForwardTime {forward_time_tensor:.4f}"
+                    f"| TestAccuracy {test_acc_tensor:.4f} | BestModelValidationAccuracy {best_val_acc:.4f}"
+                    f"| BestModelTestAccuracy {best_test_acc_tensor:.4f} | ForwardTime {forward_time_tensor:.4f}"
                     f"| BackwardTime {backward_time_tensor:.4f} | UpdateTime {update_time_tensor:.4f}"
                     f"| SampleTime+Data_Copy {sample_time_tensor:.4f} | EvalTime {eval_time_tensor:.4f}"
                     "\n"
@@ -291,6 +302,26 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size_eval", type=int, default=100000)
     parser.add_argument("--log_every", type=int, default=20)
     parser.add_argument("--eval_every", type=int, default=5)
+    parser.add_argument(
+        "--save_checkpoints", type=utils.str2bool, default=True,
+        help="Save model.last and model.best checkpoints.",
+    )
+    parser.add_argument(
+        "--checkpoint_every", type=int, default=1,
+        help="Save model.last every N epochs (and at the final epoch).",
+    )
+    parser.add_argument(
+        "--save_rudder_state", type=utils.str2bool, default=False,
+        help="Save per-rank Rudder buffer and decision context with model.last.",
+    )
+    parser.add_argument(
+        "--resume_checkpoint", type=str, default=None,
+        help="Path to a resumable model.last checkpoint.",
+    )
+    parser.add_argument(
+        "--resume_rudder_state", choices=("scratch", "restore"), default="scratch",
+        help="Start Rudder state fresh or restore its saved per-rank state.",
+    )
     parser.add_argument("--lr", type=float, default=0.003)
     parser.add_argument("--dropout", type=float, default=0.5)
     parser.add_argument(
@@ -370,6 +401,13 @@ if __name__ == "__main__":
     parser.add_argument("--num_heads", type=int, default=0, help="Number of attention heads")
     args = parser.parse_args()
 
+
+    if args.checkpoint_every <= 0:
+        raise ValueError("--checkpoint_every must be greater than 0.")
+    if args.save_rudder_state and not args.save_checkpoints:
+        raise ValueError("--save_rudder_state requires --save_checkpoints true.")
+    if args.resume_rudder_state == "restore" and not args.resume_checkpoint:
+        raise ValueError("--resume_rudder_state restore requires --resume_checkpoint.")
 
     if args.enable_finetune and args.decision_model not in CLASSIFIER_MODELS:
         raise ValueError("Finetuning is only supported for classifier models: mlp/tabnet/lr/rf/xgb/svm.")

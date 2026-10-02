@@ -17,7 +17,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collect_samples.collector import TrainingSampleCollector
-from dist_gnn.checkpoint import save_checkpoint, checkpoint_validation_score
+from dist_gnn.checkpoint import (
+    checkpoint_validation_score,
+    load_runtime_checkpoint,
+    load_training_checkpoint,
+    save_model_checkpoint,
+    save_runtime_checkpoint,
+)
 
 class Trainer:
     def __init__(self, args, device, data, halo_nodes, ollama_port, local_rank, logdir):
@@ -25,7 +31,9 @@ class Trainer:
         self.args = args
         self.checkpoint_path = os.path.join(logdir, "checkpoints", "model.last")
         self.best_checkpoint_metric = float("-inf")
+        self.best_checkpoint_test_metric = float("nan")
         self.checkpoint_metric = None
+        self.checkpoint_test_metric = None
         self.device = device
         self.data = data
         self.halo_nodes = halo_nodes
@@ -107,6 +115,13 @@ class Trainer:
             else:
                 self.loss_fcn = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.args.lr)
+        self.model_config = {
+            "model": self.args.model, "in_feats": self.in_feats,
+            "n_classes": self.n_classes, "num_hidden": self.args.num_hidden,
+            "num_layers": self.args.num_layers, "num_heads": self.args.num_heads,
+            "dropout": self.args.dropout, "is_multilabel": self.is_multilabel,
+            "graph_name": self.args.graph_name,
+        }
         self.next_batch_inputs = q.Queue()
         self.next_batch_labels = q.Queue()
         self.next_batch_blocks = q.Queue()
@@ -166,9 +181,13 @@ class Trainer:
                 pred = self.model.module.inference(self.g, self.g.ndata["features"], self.args.batch_size_eval, self.device)
             elif self.args.model == "gat":
                 pred = self.model.module.inference(self.g, self.g.ndata["features"], self.args.num_heads, self.device, self.args.batch_size_eval)
-        self.checkpoint_metric = checkpoint_validation_score(
-            pred, self.g.ndata["labels"], self.val_nid, self.is_multilabel,
-            self.device, self.args.batch_size_eval)
+        if self.args.save_checkpoints:
+            self.checkpoint_metric = checkpoint_validation_score(
+                pred, self.g.ndata["labels"], self.val_nid, self.is_multilabel,
+                self.device, self.args.batch_size_eval)
+            self.checkpoint_test_metric = checkpoint_validation_score(
+                pred, self.g.ndata["labels"], self.test_nid, self.is_multilabel,
+                self.device, self.args.batch_size_eval)
         self.model.module.train()
         if self.is_multilabel:
             val_f1  = self._multilabel_f1(pred[self.val_nid],  self.g.ndata["labels"][self.val_nid].float())
@@ -239,9 +258,101 @@ class Trainer:
             batch_inputs, t_rpc = self.prefetcher.prefetch_with_eviction(input_nodes_array, batch_inputs, epoch, step)
             self.next_batch_inputs.put(batch_inputs)
         return t_rpc
+
+    @staticmethod
+    def _peek_queue(item_queue, name):
+        """Copy the single prefetched item without consuming the live queue."""
+        with item_queue.mutex:
+            if len(item_queue.queue) != 1:
+                raise RuntimeError(
+                    f"Expected one pending {name} item, found {len(item_queue.queue)}"
+                )
+            return item_queue.queue[0]
+
+    @staticmethod
+    def _serialize_block(block):
+        src, dst = block.edges(order="eid")
+        return {
+            "src": src.cpu(),
+            "dst": dst.cpu(),
+            "num_src_nodes": block.num_src_nodes(),
+            "num_dst_nodes": block.num_dst_nodes(),
+            "srcdata": {key: value.cpu() for key, value in block.srcdata.items()},
+            "dstdata": {key: value.cpu() for key, value in block.dstdata.items()},
+            "edata": {key: value.cpu() for key, value in block.edata.items()},
+        }
+
+    @staticmethod
+    def _deserialize_block(state):
+        block = dgl.create_block(
+            (state["src"], state["dst"]),
+            num_src_nodes=state["num_src_nodes"],
+            num_dst_nodes=state["num_dst_nodes"],
+        )
+        for key, value in state["srcdata"].items():
+            block.srcdata[key] = value
+        for key, value in state["dstdata"].items():
+            block.dstdata[key] = value
+        for key, value in state["edata"].items():
+            block.edata[key] = value
+        return block
+
+    def _pending_minibatch_state(self):
+        """Serialize the minibatch that overlaps the end of the current epoch."""
+        blocks = self._peek_queue(self.next_batch_blocks, "blocks")
+        return {
+            "inputs": self._peek_queue(self.next_batch_inputs, "inputs").cpu(),
+            "labels": self._peek_queue(self.next_batch_labels, "labels").cpu(),
+            "blocks": [self._serialize_block(block) for block in blocks],
+            "rpc": float(self._peek_queue(self.next_batch_rpc, "RPC timing")),
+        }
+
+    def _restore_pending_minibatch(self, state):
+        """Put a saved prefetched minibatch back into the trainer queues."""
+        self.next_batch_inputs.put(state["inputs"])
+        self.next_batch_labels.put(state["labels"])
+        self.next_batch_blocks.put([
+            self._deserialize_block(block) for block in state["blocks"]
+        ])
+        self.next_batch_rpc.put(state["rpc"])
               
     def run(self):
         self.model = self.model.to(self.device)
+        completed_epochs = 0
+        restored_pending_minibatch = False
+        if self.args.resume_checkpoint:
+            checkpoint = load_training_checkpoint(
+                self.model, self.optimizer, self.args.resume_checkpoint,
+                self.model_config, self.device, state_rank=self.g.rank(),
+            )
+            completed_epochs = checkpoint["epoch"]
+            self.best_checkpoint_metric = checkpoint["best_validation_metric"]
+            self.best_checkpoint_test_metric = checkpoint.get(
+                "best_test_metric", float("nan")
+            )
+            if completed_epochs >= self.args.num_epochs:
+                raise ValueError(
+                    f"Checkpoint already completed {completed_epochs} epochs; "
+                    "set --num_epochs to a larger total."
+                )
+            if self.args.resume_rudder_state == "restore":
+                if not checkpoint.get("rudder_state_saved", False):
+                    raise ValueError(
+                        "This checkpoint has no Rudder state; use "
+                        "--resume_rudder_state scratch or resume another model.last."
+                    )
+                pending_minibatch = load_runtime_checkpoint(
+                    self.prefetcher, self.args.resume_checkpoint,
+                    completed_epochs, self.device,
+                )
+                self._restore_pending_minibatch(pending_minibatch)
+                restored_pending_minibatch = True
+            else:
+                # Preserve global minibatch numbering for a fresh Rudder state.
+                self.prefetcher.counter = completed_epochs * self.num_mini_batches
+            if th.distributed.get_rank() == 0:
+                print(f"Training checkpoint restored from: {os.path.abspath(self.args.resume_checkpoint)}")
+                print(f"Completed epochs: {completed_epochs}; resuming at epoch {completed_epochs + 1}")
         if self.args.num_gpus == 0:
             self.model = th.nn.parallel.DistributedDataParallel(self.model)
         else:
@@ -252,7 +363,8 @@ class Trainer:
             self.loss_fcn = self.loss_fcn.to(self.device)
         # Training loop.
         iter_tput = []
-        epoch = 0
+        epoch = completed_epochs
+        first_epoch_of_run = completed_epochs + 1
         epoch_time = []
         forward_time_list = []
         backward_time_list = []
@@ -262,10 +374,10 @@ class Trainer:
         wait_for_thread = []
         eval_time = []
         test_acc = 0.0
+        first_minibatch_sample_time = 0.0
         dataloader_iter = self.dataloader.__iter__()
         # set the number of threads for pytorch
-        for _ in range(self.args.num_epochs):
-            epoch += 1
+        for epoch in range(first_epoch_of_run, self.args.num_epochs + 1):
             tic = time.time()
             # Various time statistics.
             sample_time = 0
@@ -289,9 +401,12 @@ class Trainer:
                 while step < self.num_mini_batches:
                     tic_step = time.time()
                     future = None
-                    if step == 0 and epoch == 1:
-                        # First minibatch of the first epoch.
-                        batch_inputs, batch_labels, blocks, first_minibatch_sample_time, t_rpc = self._get_first_minibatch(dataloader_iter, epoch, step)
+                    if (step == 0 and epoch == first_epoch_of_run
+                            and not restored_pending_minibatch):
+                        # Bootstrap the pipeline at startup or after a resume.
+                        batch_inputs, batch_labels, blocks, sync_sample_time, t_rpc = self._get_first_minibatch(dataloader_iter, epoch, step)
+                        if epoch == first_epoch_of_run:
+                            first_minibatch_sample_time = sync_sample_time
                         current_batch_rpc = t_rpc
                         take_from_queue = 0
                     else:
@@ -305,7 +420,9 @@ class Trainer:
                         # if last step, reset the dataloader for the next epoch
                         dataloader_iter = self.dataloader.__iter__()
                     submit_task_start = time.time()
-                    future = self.executor.submit(self._next_minibatch, dataloader_iter, self.g, epoch, step)
+                    future = self.executor.submit(
+                        self._next_minibatch, dataloader_iter, self.g, epoch, step
+                    )
                     submit_task_time = time.time() - submit_task_start
                     num_seeds += len(blocks[-1].dstdata[dgl.NID])
                     num_inputs += len(blocks[0].srcdata[dgl.NID])
@@ -401,6 +518,7 @@ class Trainer:
             wait_for_thread.append(wait_for_thread_time)
 
             self.checkpoint_metric = None
+            self.checkpoint_test_metric = None
             if epoch % self.args.eval_every == 0 or epoch == self.args.num_epochs:
                 start = time.time()
                 val_acc, test_acc = self.evaluate()
@@ -409,19 +527,38 @@ class Trainer:
                     f"Test Acc {test_acc:.4f}, time: {time.time() - start:.4f}"
                 )
                 eval_time.append(time.time() - start)
-            self.best_checkpoint_metric = save_checkpoint(self.model, self.checkpoint_path, epoch, {
-                "model": self.args.model, "in_feats": self.in_feats,
-                "n_classes": self.n_classes, "num_hidden": self.args.num_hidden,
-                "num_layers": self.args.num_layers, "num_heads": self.args.num_heads,
-                "dropout": self.args.dropout, "is_multilabel": self.is_multilabel,
-                "graph_name": self.args.graph_name,
-            }, validation_metric=self.checkpoint_metric, best_metric=self.best_checkpoint_metric)
-        if th.distributed.get_rank() == 0:
-            print(f"Latest model checkpoint saved to: {os.path.abspath(self.checkpoint_path)}")
-            print(
-                "Best model checkpoint saved to: "
-                f"{os.path.abspath(os.path.join(os.path.dirname(self.checkpoint_path), 'model.best'))}"
-            )
+            if self.args.save_checkpoints:
+                save_last = (
+                    epoch % self.args.checkpoint_every == 0
+                    or epoch == self.args.num_epochs
+                )
+                runtime_saved = save_last and self.args.save_rudder_state
+                if runtime_saved:
+                    save_runtime_checkpoint(
+                        self.prefetcher, self._pending_minibatch_state(),
+                        self.checkpoint_path, epoch, self.device
+                    )
+                improved = (
+                    self.checkpoint_metric is not None
+                    and math.isfinite(self.checkpoint_metric)
+                    and self.checkpoint_metric > self.best_checkpoint_metric
+                )
+                if save_last or improved:
+                    (self.best_checkpoint_metric,
+                     self.best_checkpoint_test_metric) = save_model_checkpoint(
+                        self.model, self.optimizer, self.checkpoint_path, epoch,
+                        self.model_config, validation_metric=self.checkpoint_metric,
+                        best_metric=self.best_checkpoint_metric, save_last=save_last,
+                        runtime_state_saved=runtime_saved, state_rank=self.g.rank(),
+                        test_metric=self.checkpoint_test_metric,
+                        best_test_metric=self.best_checkpoint_test_metric,
+                    )
+        if self.args.save_checkpoints and th.distributed.get_rank() == 0:
+            print("Training complete. Checkpoints are in: "
+                  f"{os.path.abspath(os.path.dirname(self.checkpoint_path))}")
+            print(f"Latest model: {os.path.abspath(self.checkpoint_path)}")
+            print("Best model: "
+                  f"{os.path.abspath(os.path.join(os.path.dirname(self.checkpoint_path), 'model.best'))}")
         print("Total time prefetch was called: ", self.prefetcher.counter)
         self.prefetcher.close() 
         
@@ -447,7 +584,8 @@ class Trainer:
             'rpc_time': self.prefetcher.rpc_time,
             'agent_decision_wait_time': self.prefetcher.agent_decision_wait_time,
         }
-        return (np.mean(epoch_time), test_acc, np.mean(forward_time_list), np.mean(backward_time_list), np.mean(update_time_list), 
+        return (np.mean(epoch_time), test_acc, self.best_checkpoint_metric,
+                self.best_checkpoint_test_metric, np.mean(forward_time_list), np.mean(backward_time_list), np.mean(update_time_list),
                 np.mean(sample_time_list), np.mean(eval_time),
                 self.prefetcher.calculate_hit_rate(), self.prefetcher.calculate_miss_rate(), self.prefetcher.alpha, 
                 self.prefetcher.period, self.prefetcher.threshold, absolute_total_time, prefetch_time)

@@ -44,3 +44,10 @@ OLLAMA_MODELS_DIR=""
 COLLECT_TRAINING_FOR_CLASSIFIER="false"
 # Optional output CSV path (per-rank suffix is added automatically).
 TRAINING_DATA_FILEPATH=""
+
+# Checkpointing and resume
+SAVE_CHECKPOINTS="true"            # false disables model.last and model.best
+CHECKPOINT_EVERY="1"               # save model.last every N epochs
+SAVE_RUDDER_STATE="false"          # also save per-rank buffer and Ollama context
+RESUME_CHECKPOINT=""               # path to a model.last checkpoint, or empty
+RESUME_RUDDER_STATE="scratch"       # scratch | restore

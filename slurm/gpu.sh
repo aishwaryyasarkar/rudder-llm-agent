@@ -32,6 +32,11 @@ OLLAMA_BIN=${23} # optional override for ollama executable
 OLLAMA_MODELS_DIR=${24} # optional override for ollama models directory
 COLLECT_TRAINING_FOR_CLASSIFIER=${25} # whether to collect classifier-training data
 TRAINING_DATA_FILEPATH=${26} # optional output CSV path for collected training data
+SAVE_CHECKPOINTS=${27}
+CHECKPOINT_EVERY=${28}
+SAVE_RUDDER_STATE=${29}
+RESUME_CHECKPOINT=${30}
+RESUME_RUDDER_STATE=${31}
 TOTAL_GPUS=$(($GPUS_PER_NODE * $NUM_NODES)) # total number of GPUs
 JOBID=$SLURM_JOB_ID
 
@@ -44,6 +49,10 @@ if [ -n "$OLLAMA_MODELS_DIR" ]; then
 fi
 if [ -n "$TRAINING_DATA_FILEPATH" ]; then
     OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --training_data_filepath $TRAINING_DATA_FILEPATH"
+fi
+OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --save_checkpoints $SAVE_CHECKPOINTS --checkpoint_every $CHECKPOINT_EVERY --save_rudder_state $SAVE_RUDDER_STATE --resume_rudder_state $RESUME_RUDDER_STATE"
+if [ -n "$RESUME_CHECKPOINT" ]; then
+    OPTIONAL_MAIN_ARGS="$OPTIONAL_MAIN_ARGS --resume_checkpoint $RESUME_CHECKPOINT"
 fi
 
 if [ -z "$ML_MODEL_DIR" ]; then
