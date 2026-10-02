@@ -204,6 +204,7 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
     except Exception as exc:
         error = exc
     _collective_error(error, device, "Rudder checkpoint read")
+    print(f"DGL rank {state_rank} loaded Rudder checkpoint file", flush=True)
 
     error = None
     try:
