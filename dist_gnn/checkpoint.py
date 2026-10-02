@@ -199,6 +199,7 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
     error = None
     pending_minibatch = None
     try:
+        print(f"DGL rank {state_rank} loading Rudder checkpoint: {source.resolve()}", flush=True)
         artifact = torch.load(source, map_location="cpu", weights_only=True)
     except Exception as exc:
         error = exc
@@ -206,23 +207,30 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
 
     error = None
     try:
-        # All trainers exchange only the small rank/path descriptors. This
-        # migrates old checkpoints without every trainer loading every large
-        # runtime sidecar to discover its saved DGL rank.
-        descriptors = [None] * torch.distributed.get_world_size()
-        torch.distributed.all_gather_object(descriptors, {
-            "rank": artifact.get("rank"), "path": str(source)
-        })
-        matches = [item for item in descriptors if item["rank"] == state_rank]
-        if len(matches) != 1:
-            raise ValueError(
-                f"Expected one runtime checkpoint for DGL rank {state_rank}, "
-                f"found {len(matches)}"
-            )
-        matched_source = Path(matches[0]["path"])
-        if matched_source != source:
-            source = matched_source
-            artifact = torch.load(source, map_location="cpu", weights_only=True)
+        needs_mapping = torch.tensor(
+            int(artifact.get("rank") != state_rank), device=device
+        )
+        torch.distributed.all_reduce(
+            needs_mapping, op=torch.distributed.ReduceOp.MAX
+        )
+        if needs_mapping.item():
+            # All trainers exchange only the small rank/path descriptors. This
+            # migrates old checkpoints without every trainer loading every
+            # large runtime sidecar to discover its saved DGL rank.
+            descriptors = [None] * torch.distributed.get_world_size()
+            torch.distributed.all_gather_object(descriptors, {
+                "rank": artifact.get("rank"), "path": str(source)
+            })
+            matches = [item for item in descriptors if item["rank"] == state_rank]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Expected one runtime checkpoint for DGL rank {state_rank}, "
+                    f"found {len(matches)}"
+                )
+            matched_source = Path(matches[0]["path"])
+            if matched_source != source:
+                source = matched_source
+                artifact = torch.load(source, map_location="cpu", weights_only=True)
         if artifact.get("format_version") != RUNTIME_FORMAT_VERSION:
             raise ValueError(f"Unsupported Rudder checkpoint format in {source}")
         if artifact.get("epoch") != expected_epoch:
@@ -230,6 +238,7 @@ def load_runtime_checkpoint(prefetcher, model_checkpoint_path, expected_epoch, d
         if (artifact.get("rank") != state_rank
                 or artifact.get("world_size") != torch.distributed.get_world_size()):
             raise ValueError(f"Rudder checkpoint DGL rank or world size does not match: {source}")
+        print(f"DGL rank {state_rank} restoring Rudder buffer state", flush=True)
         prefetcher.load_runtime_state_dict(artifact["runtime_state"])
         pending_minibatch = artifact.get("pending_minibatch")
         if pending_minibatch is None:
