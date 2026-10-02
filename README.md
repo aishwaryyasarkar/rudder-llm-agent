@@ -241,7 +241,7 @@ bash set_params.sh --help
 Each job writes checkpoints under `<job_log_directory>/checkpoints/`:
 
 - `model.last` contains the latest scheduled model, optimizer, epoch, and random-number state. It is saved every `CHECKPOINT_EVERY` epochs and once at the final epoch.
-- `model.best` is updated whenever a scheduled validation reports a better global validation accuracy (or micro-F1 for multi-label data). It follows `--eval_every`, independently of `CHECKPOINT_EVERY`.
+- `model.best` is updated whenever a scheduled validation reports a better global validation accuracy (or micro-F1 for multi-label data). It follows `--eval_every`, independently of `CHECKPOINT_EVERY`. At completion, the `.out` log and summary file report that validation metric and the corresponding global test metric.
 - `runtime.rank-<rank>.last` files are written with `model.last` when `SAVE_RUDDER_STATE="true"`. They contain each rank's buffer state, metrics, structured Ollama eviction context, and the pending prefetched minibatch. Cached buffer features are rebuilt from the graph during restore.
 
 Configure this behavior in [`slurm/example_config.sh`](slurm/example_config.sh):

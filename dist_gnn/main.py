@@ -186,14 +186,16 @@ def main(args):
         print(f"Rank {g.rank()} Trainer and Prefetcher Initialized.")
         
         # Train and evaluate
-        (epoch_time, test_acc, forward_time, backward_time, update_time, sample_time, eval_time, 
+        (epoch_time, test_acc, best_val_acc, best_test_acc,
+        forward_time, backward_time, update_time, sample_time, eval_time,
         hit_rate, miss_rate, alpha, period, threshold, absolute_total_time,
         prefetch_time) = trainer.run()
 
         print(
         f"Summary of node classification(GraphSAGE): GraphName "
         f"{args.graph_name} | TrainEpochTime(mean) {epoch_time:.4f} "
-        f"| TestAccuracy {test_acc:.4f} | ForwardTime {forward_time:.4f}"
+        f"| TestAccuracy {test_acc:.4f} | BestModelValidationAccuracy {best_val_acc:.4f} "
+        f"| BestModelTestAccuracy {best_test_acc:.4f} | ForwardTime {forward_time:.4f}"
         f"| BackwardTime {backward_time:.4f} | UpdateTime {update_time:.4f}"
         f" | SampleTime {sample_time:.4f} | EvalTime {eval_time:.4f}"
         )
@@ -206,6 +208,7 @@ def main(args):
         sample_time_tensor = utils.calculate_mean(sample_time, device)
         eval_time_tensor = utils.calculate_mean(eval_time, device)
         test_acc_tensor = utils.calculate_mean(test_acc, device) 
+        best_test_acc_tensor = utils.calculate_mean(best_test_acc, device)
         total_epoch_time_tensor = utils.sum(absolute_total_time['epoch_time'], device)
 
         # Write individual rank's total epoch time to args.summary_filepath
@@ -214,6 +217,8 @@ def main(args):
                 "\n"
                 f"Rank {g.rank()} | TotalEpochTime {absolute_total_time['epoch_time']:.4f}s"
                 f"| HitRate {hit_rate:.4f} | MissRate {miss_rate:.4f}"
+                f"| BestModelValidationAccuracy {best_val_acc:.4f}"
+                f"| BestModelTestAccuracy {best_test_acc:.4f}"
                 f"| ForwardTime {absolute_total_time['forward_time']:.4f}s"
                 f"| BackwardTime {absolute_total_time['backward_time']:.4f}s"
                 f"| UpdateTime {absolute_total_time['update_time']:.4f}s"
@@ -237,6 +242,11 @@ def main(args):
             print("Average sample time across processes: {:.4f} seconds".format(sample_time_tensor))
             print("Average eval time across processes: {:.4f} seconds".format(eval_time_tensor))
             print("Average test accuracy across processes: {:.4f}".format(test_acc_tensor))
+            print(
+                "Best model validation accuracy: {:.4f}; corresponding average test accuracy: {:.4f}".format(
+                    best_val_acc, best_test_acc_tensor
+                )
+            )
             
             # write the summary to a args.summary_filepath
             with open(args.summary_filepath, "a") as f:
@@ -246,7 +256,8 @@ def main(args):
                     "\n"
                     f"Summary of node classification({args.model}): GraphName, prefetch_fraction: {args.prefetch_fraction}, "
                     f"{args.graph_name} | TrainEpochTime(mean) {epoch_time_tensor:.4f} | TotalEpochTime {total_epoch_time_tensor:.4f}"
-                    f"| TestAccuracy {test_acc_tensor:.4f} | ForwardTime {forward_time_tensor:.4f}"
+                    f"| TestAccuracy {test_acc_tensor:.4f} | BestModelValidationAccuracy {best_val_acc:.4f}"
+                    f"| BestModelTestAccuracy {best_test_acc_tensor:.4f} | ForwardTime {forward_time_tensor:.4f}"
                     f"| BackwardTime {backward_time_tensor:.4f} | UpdateTime {update_time_tensor:.4f}"
                     f"| SampleTime+Data_Copy {sample_time_tensor:.4f} | EvalTime {eval_time_tensor:.4f}"
                     "\n"

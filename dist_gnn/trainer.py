@@ -31,7 +31,9 @@ class Trainer:
         self.args = args
         self.checkpoint_path = os.path.join(logdir, "checkpoints", "model.last")
         self.best_checkpoint_metric = float("-inf")
+        self.best_checkpoint_test_metric = float("nan")
         self.checkpoint_metric = None
+        self.checkpoint_test_metric = None
         self.device = device
         self.data = data
         self.halo_nodes = halo_nodes
@@ -183,6 +185,9 @@ class Trainer:
             self.checkpoint_metric = checkpoint_validation_score(
                 pred, self.g.ndata["labels"], self.val_nid, self.is_multilabel,
                 self.device, self.args.batch_size_eval)
+            self.checkpoint_test_metric = checkpoint_validation_score(
+                pred, self.g.ndata["labels"], self.test_nid, self.is_multilabel,
+                self.device, self.args.batch_size_eval)
         self.model.module.train()
         if self.is_multilabel:
             val_f1  = self._multilabel_f1(pred[self.val_nid],  self.g.ndata["labels"][self.val_nid].float())
@@ -322,6 +327,9 @@ class Trainer:
             )
             completed_epochs = checkpoint["epoch"]
             self.best_checkpoint_metric = checkpoint["best_validation_metric"]
+            self.best_checkpoint_test_metric = checkpoint.get(
+                "best_test_metric", float("nan")
+            )
             if completed_epochs >= self.args.num_epochs:
                 raise ValueError(
                     f"Checkpoint already completed {completed_epochs} epochs; "
@@ -510,6 +518,7 @@ class Trainer:
             wait_for_thread.append(wait_for_thread_time)
 
             self.checkpoint_metric = None
+            self.checkpoint_test_metric = None
             if epoch % self.args.eval_every == 0 or epoch == self.args.num_epochs:
                 start = time.time()
                 val_acc, test_acc = self.evaluate()
@@ -535,11 +544,14 @@ class Trainer:
                     and self.checkpoint_metric > self.best_checkpoint_metric
                 )
                 if save_last or improved:
-                    self.best_checkpoint_metric = save_model_checkpoint(
+                    (self.best_checkpoint_metric,
+                     self.best_checkpoint_test_metric) = save_model_checkpoint(
                         self.model, self.optimizer, self.checkpoint_path, epoch,
                         self.model_config, validation_metric=self.checkpoint_metric,
                         best_metric=self.best_checkpoint_metric, save_last=save_last,
                         runtime_state_saved=runtime_saved, state_rank=self.g.rank(),
+                        test_metric=self.checkpoint_test_metric,
+                        best_test_metric=self.best_checkpoint_test_metric,
                     )
         if self.args.save_checkpoints and th.distributed.get_rank() == 0:
             print("Training complete. Checkpoints are in: "
@@ -572,7 +584,8 @@ class Trainer:
             'rpc_time': self.prefetcher.rpc_time,
             'agent_decision_wait_time': self.prefetcher.agent_decision_wait_time,
         }
-        return (np.mean(epoch_time), test_acc, np.mean(forward_time_list), np.mean(backward_time_list), np.mean(update_time_list), 
+        return (np.mean(epoch_time), test_acc, self.best_checkpoint_metric,
+                self.best_checkpoint_test_metric, np.mean(forward_time_list), np.mean(backward_time_list), np.mean(update_time_list),
                 np.mean(sample_time_list), np.mean(eval_time),
                 self.prefetcher.calculate_hit_rate(), self.prefetcher.calculate_miss_rate(), self.prefetcher.alpha, 
                 self.prefetcher.period, self.prefetcher.threshold, absolute_total_time, prefetch_time)

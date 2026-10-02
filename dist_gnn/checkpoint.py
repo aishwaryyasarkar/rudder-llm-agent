@@ -82,13 +82,15 @@ def _optimizer_to_device(optimizer, device):
 def save_model_checkpoint(model, optimizer, path, epoch, model_config,
                           validation_metric=None, best_metric=float("-inf"),
                           save_last=True, runtime_state_saved=False,
-                          state_rank=None):
+                          state_rank=None, test_metric=None,
+                          best_test_metric=float("nan")):
     """Save scheduled latest state and any newly improved best model."""
     module = _module(model)
     device = next(module.parameters()).device
     improved = (validation_metric is not None and math.isfinite(validation_metric)
                 and validation_metric > best_metric)
     next_best = validation_metric if improved else best_metric
+    next_best_test = test_metric if improved else best_test_metric
 
     if state_rank is None:
         state_rank = torch.distributed.get_rank()
@@ -110,6 +112,7 @@ def save_model_checkpoint(model, optimizer, path, epoch, model_config,
                 "model_config": model_config,
                 "validation_metric": validation_metric,
                 "best_validation_metric": next_best,
+                "best_test_metric": next_best_test,
                 "model_state_dict": _cpu_copy(module.state_dict()),
                 "optimizer_state_dict": _cpu_copy(optimizer.state_dict()),
                 "rng_states": rng_states,
@@ -129,7 +132,7 @@ def save_model_checkpoint(model, optimizer, path, epoch, model_config,
         except Exception as exc:
             error = exc
     _collective_error(error, device, "Checkpoint save")
-    return next_best
+    return next_best, next_best_test
 
 
 def load_training_checkpoint(model, optimizer, path, model_config, device,
